@@ -17,14 +17,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      AIRFLOW_HOME: "${{ runner.temp }}/airflow"
-      AIRFLOW__CORE__DAGS_FOLDER: "${{ github.workspace }}/orchestration/dags"
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       CHURN_PIPELINE_USE_SYNTHETIC_DATA: "true"
-      TELCO_RAW_PATH: "${{ runner.temp }}/raw/telco_customer_churn.csv"
-      TELCO_DELTA_PATH: "${{ runner.temp }}/processed/telco_delta"
-      DBT_DUCKDB_PATH: "${{ runner.temp }}/features/churn_analytics.duckdb"
-      MLFLOW_TRACKING_URI: "sqlite:///${{ runner.temp }}/mlflow/mlflow.db"
       MLFLOW_EXPERIMENT_NAME: "telco-customer-churn-ci"
       MLFLOW_REGISTERED_MODEL_NAME: "telco-churn-classifier-ci"
       MODEL_MIN_TEST_ROC_AUC: "0"
@@ -47,6 +41,24 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+
+      - name: Configure CI runtime paths
+        shell: bash
+        run: |
+          mkdir -p \
+            "$RUNNER_TEMP/airflow" \
+            "$RUNNER_TEMP/raw" \
+            "$RUNNER_TEMP/processed" \
+            "$RUNNER_TEMP/features" \
+            "$RUNNER_TEMP/mlflow"
+          {
+            echo "AIRFLOW_HOME=$RUNNER_TEMP/airflow"
+            echo "AIRFLOW__CORE__DAGS_FOLDER=$GITHUB_WORKSPACE/orchestration/dags"
+            echo "TELCO_RAW_PATH=$RUNNER_TEMP/raw/telco_customer_churn.csv"
+            echo "TELCO_DELTA_PATH=$RUNNER_TEMP/processed/telco_delta"
+            echo "DBT_DUCKDB_PATH=$RUNNER_TEMP/features/churn_analytics.duckdb"
+            echo "MLFLOW_TRACKING_URI=sqlite:///$RUNNER_TEMP/mlflow/mlflow.db"
+          } >> "$GITHUB_ENV"
 
       - name: Install project and development dependencies
         run: pip install -e ".[dev,orchestration]"
