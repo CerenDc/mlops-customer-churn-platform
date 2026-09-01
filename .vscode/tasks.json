@@ -80,6 +80,50 @@
         "panel": "shared",
         "reveal": "always"
       }
+    },
+    {
+      "label": "Airflow Standalone",
+      "type": "shell",
+      "command": "airflow standalone",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}",
+          "AIRFLOW_HOME": "${workspaceFolder}/data/airflow",
+          "AIRFLOW__CORE__DAGS_FOLDER": "${workspaceFolder}/orchestration/dags",
+          "AIRFLOW__CORE__LOAD_EXAMPLES": "false"
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "clear": true,
+        "echo": true,
+        "focus": false,
+        "panel": "dedicated",
+        "reveal": "always"
+      }
+    },
+    {
+      "label": "Airflow DAG Test",
+      "type": "shell",
+      "command": "airflow dags test mlops_customer_churn_pipeline --dagfile-path \"${workspaceFolder}/orchestration/dags/churn_mlops_pipeline.py\"",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}",
+          "AIRFLOW_HOME": "${workspaceFolder}/data/airflow",
+          "AIRFLOW__CORE__DAGS_FOLDER": "${workspaceFolder}/orchestration/dags",
+          "AIRFLOW__CORE__LOAD_EXAMPLES": "false"
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "clear": true,
+        "echo": true,
+        "focus": false,
+        "panel": "dedicated",
+        "reveal": "always"
+      }
     }
   ]
 }

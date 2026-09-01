@@ -1,7 +1,7 @@
 # MLOps Customer Churn Platform
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/status-V6-informational.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-V7-informational.svg)](#project-status)
 
 A portfolio project that incrementally builds a production-style, end-to-end
 MLOps platform for predicting customer churn.
@@ -24,6 +24,7 @@ testable version so the operational decisions remain understandable.
 
 ```mermaid
 flowchart TD
+    Z[Apache Airflow] -. orchestrates .-> B
     A[IBM Telco CSV] --> B[Python ingestion]
     B --> C[RAW<br/>data/raw]
     C --> D[Apache Spark]
@@ -38,11 +39,14 @@ flowchart TD
     L --> M[MLflow Model Registry]
     M --> N[Promotion gates]
     N --> O[champion alias]
+    Z -. orchestrates .-> D
+    Z -. orchestrates .-> G
+    Z -. orchestrates .-> J
+    Z -. orchestrates .-> M
 ```
 
-V6 implements the data flow through reproducible training, experiment tracking,
-and controlled model lifecycle management. Serving and orchestration remain
-future work.
+V7 adds a manually triggered Airflow DAG around the independently executable
+data, training, and lifecycle components. Serving remains future work.
 
 ## Technology roadmap
 
@@ -54,8 +58,8 @@ future work.
 | V3 | Typed local processing and transactional storage | Apache Spark, Delta Lake |
 | V4 | SQL modeling, analytical quality, documentation, and lineage | dbt, DuckDB |
 | V5 | Model training, evaluation, and experiment tracking | scikit-learn, XGBoost, MLflow |
-| V6 (current) | Model versioning and champion/challenger lifecycle | MLflow Model Registry |
-| V7 | Workflow orchestration | Airflow |
+| V6 | Model versioning and champion/challenger lifecycle | MLflow Model Registry |
+| V7 (current) | Workflow orchestration | Apache Airflow 3 |
 | V8 | Packaging, serving, and observability | Docker, API framework, monitoring stack |
 
 The roadmap is directional. Technology choices will be evaluated when their
@@ -84,6 +88,12 @@ python -m pip install -e ".[dev]"
 cp .env.example .env
 ```
 
+Install the isolated orchestration extra only when working with Airflow:
+
+```bash
+python -m pip install -e ".[dev,orchestration]"
+```
+
 Run the quality checks:
 
 ```bash
@@ -102,9 +112,9 @@ The same checks can be launched in VS Code from **Tasks: Run Task** by choosing
 GitHub Actions automatically validates Ruff linting, Ruff formatting, and the
 pytest suite for every push to `main` and every pull request targeting `main`.
 The workflow uses Python 3.13, Temurin Java 17, and cached Python dependencies.
-It also creates a synthetic Delta table, runs a genuine DuckDB/dbt build, and
-executes model training with isolated MLflow tracking without downloading the
-public dataset.
+It initializes a temporary Airflow SQLite backend and executes one genuine
+offline DAG run from synthetic RAW CSV through Spark, Delta, dbt, MLflow,
+Model Registry, champion promotion, reload, and prediction.
 
 ## V2 data ingestion
 
@@ -300,7 +310,7 @@ python -m churn_platform.ml.train
 python -m churn_platform.ml.registry
 ```
 
-Manual stage execution remains intentional until orchestration is introduced.
+Manual stage execution remains supported alongside orchestration.
 Later serving applications will load the stable URI below instead of knowing a
 specific version number:
 
@@ -311,10 +321,74 @@ models:/telco-churn-classifier@champion
 Moving the alias from version 1 to version 4 or 17 requires no serving-code
 change. Model serving itself is not implemented in V6.
 
+## V7 — Apache Airflow orchestration
+
+Airflow adds dependency management, bounded retries, failure propagation,
+observability, and a foundation for later scheduling. It does not replace the
+specialized components: Spark performs data processing, dbt performs SQL
+transformation and quality checks, MLflow manages experiments and model
+lifecycle, and Airflow orchestrates their existing command-line interfaces.
+
+```text
+prepare_raw_data
+        ↓
+spark_processing
+        ↓
+dbt_build
+        ↓
+train_models
+        ↓
+registry_lifecycle
+        ↓
+verify_champion
+```
+
+The DAG is manual by default (`schedule=None`), does not catch up, and allows
+one active run. Set `CHURN_DAG_SCHEDULE` only when an explicit schedule is
+wanted. Training has no retries because each attempt intentionally creates new
+experiment runs; registry retries are safe because V6 prevents duplicate model
+versions. Re-running the whole DAG is therefore a new training cycle, not a
+perfectly idempotent operation.
+
+Tasks exchange state through the filesystem, Delta Lake, DuckDB, and MLflow.
+They do not place DataFrames, datasets, or model binaries in XCom. The Airflow
+run ID and DAG ID are attached to MLflow training runs as small lineage tags.
+
+For local development, install the orchestration extra and run:
+
+```bash
+export AIRFLOW_HOME="$PWD/data/airflow"
+export AIRFLOW__CORE__DAGS_FOLDER="$PWD/orchestration/dags"
+export AIRFLOW__CORE__LOAD_EXAMPLES=false
+airflow db migrate
+airflow dags reserialize
+airflow dags list
+airflow standalone
+```
+
+The local UI is available at `http://127.0.0.1:8080`. Airflow's SQLite metadata
+database and generated standalone credentials are local-development artifacts
+under `data/airflow/` and are ignored by Git. SQLite is not intended as the
+production Airflow metadata backend.
+
+Run the DAG once without starting persistent services:
+
+```bash
+airflow dags test mlops_customer_churn_pipeline \
+  --dagfile-path "$PWD/orchestration/dags/churn_mlops_pipeline.py"
+```
+
+Production mode uses the real ingestion command. CI sets
+`CHURN_PIPELINE_USE_SYNTHETIC_DATA=true` and temporary paths, changing only the
+RAW preparation task; all downstream Spark, dbt, ML, registry, and verification
+code remains identical. Every manual V2–V6 command documented above remains
+independently usable.
+
 ## Repository layout
 
 ```text
-src/churn_platform/   Installable ingestion, Spark, and ML package
+src/churn_platform/   Installable ingestion, Spark, ML, and orchestration helpers
+orchestration/dags/   Airflow DAG definitions
 dbt_project/          SQL models, tests, documentation, and local profile
 tests/                Automated tests
 data/                 Raw, processed, and feature data zones
@@ -327,8 +401,8 @@ docs/                 Project documentation
 
 ## Project status
 
-**V6 — MLflow Model Registry + Champion/Challenger.** Selected V5 models are
-versioned without retraining, evaluated by deterministic promotion gates, and
-resolved through stable `champion` and `challenger` aliases. Airflow, Docker,
-Databricks, serving, deployment, and monitoring are intentionally not
+**V7 — Apache Airflow Orchestration.** A manually triggered Airflow 3 DAG now
+coordinates ingestion, Spark, dbt, training, registry lifecycle, and champion
+verification through their existing CLIs. Docker, PostgreSQL, distributed
+executors, serving, deployment, and monitoring are intentionally not
 implemented in this version.

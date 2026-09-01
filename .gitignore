@@ -51,6 +51,9 @@ mlruns/
 mlartifacts/
 *.mlflow.db
 
+# Local Airflow metadata, logs, configuration, and generated credentials
+data/airflow/
+
 # IDE and operating system
 .DS_Store
 .idea/

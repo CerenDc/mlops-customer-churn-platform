@@ -13,9 +13,23 @@ permissions:
 
 jobs:
   quality:
-    name: Ruff and pytest
+    name: Quality and orchestrated pipeline
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
+    env:
+      AIRFLOW_HOME: "${{ runner.temp }}/airflow"
+      AIRFLOW__CORE__DAGS_FOLDER: "${{ github.workspace }}/orchestration/dags"
+      AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+      CHURN_PIPELINE_USE_SYNTHETIC_DATA: "true"
+      TELCO_RAW_PATH: "${{ runner.temp }}/raw/telco_customer_churn.csv"
+      TELCO_DELTA_PATH: "${{ runner.temp }}/processed/telco_delta"
+      DBT_DUCKDB_PATH: "${{ runner.temp }}/features/churn_analytics.duckdb"
+      MLFLOW_TRACKING_URI: "sqlite:///${{ runner.temp }}/mlflow/mlflow.db"
+      MLFLOW_EXPERIMENT_NAME: "telco-customer-churn-ci"
+      MLFLOW_REGISTERED_MODEL_NAME: "telco-churn-classifier-ci"
+      MODEL_MIN_TEST_ROC_AUC: "0"
+      MODEL_MIN_TEST_F1: "0"
+      MODEL_MIN_TEST_RECALL: "0"
 
     steps:
       - name: Check out repository
@@ -35,7 +49,7 @@ jobs:
           java-version: "17"
 
       - name: Install project and development dependencies
-        run: pip install -e ".[dev]"
+        run: pip install -e ".[dev,orchestration]"
 
       - name: Run Ruff lint checks
         run: ruff check .
@@ -46,37 +60,16 @@ jobs:
       - name: Run tests
         run: pytest -q
 
-      - name: Create synthetic Delta fixture
+      - name: Initialize Airflow metadata
+        run: airflow db migrate
+
+      - name: Validate Airflow DAG discovery
+        run: |
+          airflow dags reserialize
+          airflow dags list-import-errors
+          airflow dags list | grep mlops_customer_churn_pipeline
+
+      - name: Execute orchestrated synthetic pipeline
         run: >-
-          python -m churn_platform.spark.create_test_fixture
-          --output "${{ runner.temp }}/telco_customer_churn_delta"
-
-      - name: Validate dbt connection
-        env:
-          TELCO_DELTA_PATH: "${{ runner.temp }}/telco_customer_churn_delta"
-          DBT_DUCKDB_PATH: "${{ runner.temp }}/churn_analytics.duckdb"
-        run: dbt debug --project-dir dbt_project --profiles-dir dbt_project
-
-      - name: Build and test dbt project
-        env:
-          TELCO_DELTA_PATH: "${{ runner.temp }}/telco_customer_churn_delta"
-          DBT_DUCKDB_PATH: "${{ runner.temp }}/churn_analytics.duckdb"
-        run: dbt build --project-dir dbt_project --profiles-dir dbt_project
-
-      - name: Train and track candidate models
-        env:
-          DBT_DUCKDB_PATH: "${{ runner.temp }}/churn_analytics.duckdb"
-          MLFLOW_TRACKING_URI: "sqlite:///${{ runner.temp }}/mlflow/mlflow.db"
-          MLFLOW_EXPERIMENT_NAME: "telco-customer-churn-ci"
-        run: python -m churn_platform.ml.train
-
-      - name: Register, promote, and reload champion
-        env:
-          DBT_DUCKDB_PATH: "${{ runner.temp }}/churn_analytics.duckdb"
-          MLFLOW_TRACKING_URI: "sqlite:///${{ runner.temp }}/mlflow/mlflow.db"
-          MLFLOW_EXPERIMENT_NAME: "telco-customer-churn-ci"
-          MLFLOW_REGISTERED_MODEL_NAME: "telco-churn-classifier-ci"
-          MODEL_MIN_TEST_ROC_AUC: "0"
-          MODEL_MIN_TEST_F1: "0"
-          MODEL_MIN_TEST_RECALL: "0"
-        run: python -m churn_platform.ml.registry
+          airflow dags test mlops_customer_churn_pipeline
+          --dagfile-path "${{ github.workspace }}/orchestration/dags/churn_mlops_pipeline.py"

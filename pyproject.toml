@@ -26,6 +26,10 @@ dev = [
     "pytest>=8.3,<9",
     "ruff>=0.9,<1",
 ]
+orchestration = [
+    "apache-airflow==3.3.0",
+    "apache-airflow-providers-standard==1.18.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/churn_platform"]

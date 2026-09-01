@@ -354,8 +354,10 @@ def run_processing_pipeline(
 
 def main() -> None:
     """Run the Spark processing pipeline from the command line."""
+    input_path = Path(os.getenv("TELCO_RAW_PATH", str(DEFAULT_INPUT_PATH)))
+    output_path = Path(os.getenv("TELCO_DELTA_PATH", str(DEFAULT_OUTPUT_PATH)))
     try:
-        result = run_processing_pipeline()
+        result = run_processing_pipeline(input_path=input_path, output_path=output_path)
     except FileNotFoundError as error:
         raise SystemExit(str(error)) from error
 

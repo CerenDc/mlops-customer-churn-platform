@@ -190,7 +190,8 @@ def download_telco_dataset(
 
 def main() -> None:
     """Run the Telco ingestion pipeline from the command line."""
-    result = download_telco_dataset()
+    output_path = Path(os.getenv("TELCO_RAW_PATH", str(DEFAULT_OUTPUT_PATH)))
+    result = download_telco_dataset(output_path=output_path)
     print("Telco ingestion completed")
     print(f"Rows: {result.rows}")
     print(f"Columns: {result.columns}")

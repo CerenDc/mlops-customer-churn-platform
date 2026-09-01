@@ -97,6 +97,7 @@ def log_candidate_run(
                 "data_layer": "dbt_feature_mart",
                 "model_family": model_family,
                 "candidate_status": "pending",
+                **_orchestration_tags(),
             }
         )
         parameters = {
@@ -182,6 +183,19 @@ def _log_interpretation_artifact(pipeline: Pipeline, model_name: str) -> None:
         path = Path(directory) / filename
         interpretation.to_csv(path, index=False)
         mlflow.log_artifact(str(path), artifact_path="interpretation")
+
+
+def _orchestration_tags() -> dict[str, str]:
+    run_id = os.getenv("AIRFLOW_PIPELINE_RUN_ID")
+    if not run_id:
+        return {}
+    return {
+        "orchestrator": "airflow",
+        "airflow_dag_id": os.getenv(
+            "AIRFLOW_PIPELINE_DAG_ID", "mlops_customer_churn_pipeline"
+        ),
+        "airflow_run_id": run_id,
+    }
 
 
 def log_selected_test_result(run_id: str, result: EvaluationResult) -> None:

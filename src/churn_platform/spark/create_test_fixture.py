@@ -16,47 +16,10 @@ from churn_platform.spark.transform_telco import (
     validate_transformed_telco,
     write_delta,
 )
-
-SYNTHETIC_ROW_COUNT = 60
-
-
-def _synthetic_telco_rows() -> tuple[tuple[object, ...], ...]:
-    rows = []
-    contracts = ("Month-to-month", "One year", "Two year")
-    for index in range(SYNTHETIC_ROW_COUNT):
-        tenure = index % 60
-        monthly_charges = 35.0 + (index % 20) * 3.0
-        churn = "Yes" if index % 4 == 0 else "No"
-        internet = "No" if index % 5 == 0 else ("DSL" if index % 2 else "Fiber optic")
-        rows.append(
-            (
-                f"SYNTH-{index:04d}",
-                "Female" if index % 2 == 0 else "Male",
-                index % 2,
-                "Yes" if index % 3 else "No",
-                "Yes" if index % 4 else "No",
-                tenure,
-                "Yes",
-                "Yes" if index % 3 == 0 else "No",
-                internet,
-                "Yes" if index % 2 else "No",
-                "Yes" if index % 3 else "No",
-                "Yes" if index % 4 else "No",
-                "Yes" if index % 5 else "No",
-                "Yes" if index % 2 else "No",
-                "Yes" if index % 3 else "No",
-                contracts[index % len(contracts)],
-                "Yes" if index % 2 else "No",
-                "Electronic check" if index % 2 else "Credit card (automatic)",
-                monthly_charges,
-                " " if tenure == 0 else f"{monthly_charges * tenure:.2f}",
-                churn,
-            )
-        )
-    return tuple(rows)
-
-
-SYNTHETIC_TELCO_ROWS = _synthetic_telco_rows()
+from churn_platform.testing.synthetic_telco import (
+    SYNTHETIC_ROW_COUNT,
+    SYNTHETIC_TELCO_ROWS,
+)
 
 
 def create_synthetic_delta_fixture(
@@ -78,7 +41,7 @@ def create_synthetic_delta_fixture(
         )
         processed_dataset = transform_telco(raw_dataset)
         row_count = validate_transformed_telco(
-            processed_dataset, input_row_count=len(SYNTHETIC_TELCO_ROWS)
+            processed_dataset, input_row_count=SYNTHETIC_ROW_COUNT
         )
         enriched_dataset = add_technical_metadata(
             processed_dataset, Path("synthetic-ci-fixture")
