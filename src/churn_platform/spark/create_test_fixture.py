@@ -17,54 +17,46 @@ from churn_platform.spark.transform_telco import (
     write_delta,
 )
 
-SYNTHETIC_TELCO_ROWS = (
-    (
-        "SYNTH-0001",
-        "Female",
-        0,
-        "Yes",
-        "No",
-        12,
-        "Yes",
-        "No",
-        "DSL",
-        "Yes",
-        "No",
-        "No",
-        "Yes",
-        "No",
-        "No",
-        "Month-to-month",
-        "Yes",
-        "Electronic check",
-        49.5,
-        "594.0",
-        "No",
-    ),
-    (
-        "SYNTH-0002",
-        "Male",
-        1,
-        "No",
-        "No",
-        0,
-        "Yes",
-        "Yes",
-        "Fiber optic",
-        "No",
-        "Yes",
-        "Yes",
-        "No",
-        "Yes",
-        "Yes",
-        "Two year",
-        "No",
-        "Credit card (automatic)",
-        95.0,
-        " ",
-        "Yes",
-    ),
-)
+SYNTHETIC_ROW_COUNT = 60
+
+
+def _synthetic_telco_rows() -> tuple[tuple[object, ...], ...]:
+    rows = []
+    contracts = ("Month-to-month", "One year", "Two year")
+    for index in range(SYNTHETIC_ROW_COUNT):
+        tenure = index % 60
+        monthly_charges = 35.0 + (index % 20) * 3.0
+        churn = "Yes" if index % 4 == 0 else "No"
+        internet = "No" if index % 5 == 0 else ("DSL" if index % 2 else "Fiber optic")
+        rows.append(
+            (
+                f"SYNTH-{index:04d}",
+                "Female" if index % 2 == 0 else "Male",
+                index % 2,
+                "Yes" if index % 3 else "No",
+                "Yes" if index % 4 else "No",
+                tenure,
+                "Yes",
+                "Yes" if index % 3 == 0 else "No",
+                internet,
+                "Yes" if index % 2 else "No",
+                "Yes" if index % 3 else "No",
+                "Yes" if index % 4 else "No",
+                "Yes" if index % 5 else "No",
+                "Yes" if index % 2 else "No",
+                "Yes" if index % 3 else "No",
+                contracts[index % len(contracts)],
+                "Yes" if index % 2 else "No",
+                "Electronic check" if index % 2 else "Credit card (automatic)",
+                monthly_charges,
+                " " if tenure == 0 else f"{monthly_charges * tenure:.2f}",
+                churn,
+            )
+        )
+    return tuple(rows)
+
+
+SYNTHETIC_TELCO_ROWS = _synthetic_telco_rows()
 
 
 def create_synthetic_delta_fixture(

@@ -1,7 +1,7 @@
 # MLOps Customer Churn Platform
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/status-V4-informational.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-V5-informational.svg)](#project-status)
 
 A portfolio project that incrementally builds a production-style, end-to-end
 MLOps platform for predicting customer churn.
@@ -32,10 +32,12 @@ flowchart TD
     F --> G[dbt staging]
     G --> H[dbt intermediate]
     H --> I[dbt feature mart<br/>data/features]
+    I --> J[scikit-learn pipelines]
+    J --> K[MLflow experiments<br/>data/mlflow]
 ```
 
-V4 implements this data-engineering and analytical flow. Model training,
-serving, and orchestration remain future work.
+V5 implements the data flow through reproducible model training and local
+experiment tracking. Serving and orchestration remain future work.
 
 ## Technology roadmap
 
@@ -45,8 +47,8 @@ serving, and orchestration remain future work.
 | V1.1 | Developer automation and continuous integration | GitHub Actions, VS Code tasks |
 | V2 | Reproducible data ingestion and validation | pandas, HTTPX |
 | V3 | Typed local processing and transactional storage | Apache Spark, Delta Lake |
-| V4 (current) | SQL modeling, analytical quality, documentation, and lineage | dbt, DuckDB |
-| V5 | Model training, evaluation, and experiment tracking | scikit-learn, MLflow |
+| V4 | SQL modeling, analytical quality, documentation, and lineage | dbt, DuckDB |
+| V5 (current) | Model training, evaluation, and experiment tracking | scikit-learn, XGBoost, MLflow |
 | V6 | Workflow orchestration | Airflow |
 | V7 | Packaging, serving, and observability | Docker, API framework, monitoring stack |
 
@@ -94,8 +96,9 @@ The same checks can be launched in VS Code from **Tasks: Run Task** by choosing
 GitHub Actions automatically validates Ruff linting, Ruff formatting, and the
 pytest suite for every push to `main` and every pull request targeting `main`.
 The workflow uses Python 3.13, Temurin Java 17, and cached Python dependencies.
-It also creates a two-row synthetic Delta table and runs a genuine DuckDB/dbt
-build without downloading the public dataset.
+It also creates a synthetic Delta table, runs a genuine DuckDB/dbt build, and
+executes model training with isolated MLflow tracking without downloading the
+public dataset.
 
 ## V2 data ingestion
 
@@ -203,14 +206,54 @@ ignored by Git.
 | `monthly_to_total_charge_ratio` | Monthly charges divided by nonzero total charges |
 | `tenure_group` | Human-readable tenure band from no tenure through 49+ months |
 
+## V5 — model training + MLflow tracking
+
+V5 reads only the dbt feature mart and keeps preprocessing inside each fitted
+scikit-learn pipeline. Numeric values use median imputation; logistic regression
+also scales them. Categorical values use most-frequent imputation and one-hot
+encoding with unknown-category handling. `customer_id`, the original `churn`
+label, and `churn_flag` are excluded from predictors to prevent leakage.
+
+The deterministic, stratified split is 70% training, 15% validation, and 15%
+test. Logistic regression and XGBoost are fitted on the training partition and
+compared only by validation ROC AUC. The test partition is evaluated once, only
+after selecting the winner. This discipline keeps the final test estimate from
+influencing model choice.
+
+Run the upstream stages and training manually from the repository root:
+
+```bash
+python -m churn_platform.ingestion.telco
+python -m churn_platform.spark.transform_telco
+dbt build --project-dir dbt_project --profiles-dir dbt_project
+python -m churn_platform.ml.train
+```
+
+MLflow stores experiment metadata in `data/mlflow/mlflow.db` and model artifacts
+under `data/mlflow/artifacts/`. Both are generated local state and ignored by
+Git. MLflow provides repeatable run comparison, dataset lineage, metrics,
+reports, the complete reloadable pipeline, and model interpretation artifacts.
+It is deliberately local in V5: there is no model registry or remote tracking
+server.
+
+Inspect runs in the optional local UI (started only when requested):
+
+```bash
+mlflow ui --backend-store-uri sqlite:///data/mlflow/mlflow.db \
+  --host 127.0.0.1 --port 5000
+```
+
+Then open `http://127.0.0.1:5000` and select the
+`telco-customer-churn` experiment.
+
 ## Repository layout
 
 ```text
-src/churn_platform/   Installable ingestion and Spark processing package
+src/churn_platform/   Installable ingestion, Spark, and ML package
 dbt_project/          SQL models, tests, documentation, and local profile
 tests/                Automated tests
 data/                 Raw, processed, and feature data zones
-ml/                   Future modeling implementation
+ml/                   Reserved top-level modeling workspace
 notebooks/            Exploratory notebooks
 docs/                 Project documentation
 .github/workflows/    GitHub Actions continuous integration
@@ -219,7 +262,8 @@ docs/                 Project documentation
 
 ## Project status
 
-**V4 — dbt + DuckDB + Data Quality.** DuckDB reads the Spark-produced Delta
-table directly, and dbt builds a tested, documented, customer-grain analytical
-feature table. Airflow, MLflow, Docker, Databricks, model training, and serving
-are intentionally not implemented in this version.
+**V5 — model training + MLflow tracking.** Two reproducible classification
+pipelines are validation-compared, the winner is test-evaluated once, and all
+runs are tracked locally with reloadable model artifacts. Airflow, Docker,
+Databricks, model registry, tuning, serving, deployment, and monitoring are
+intentionally not implemented in this version.

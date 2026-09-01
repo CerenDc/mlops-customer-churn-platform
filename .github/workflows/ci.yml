@@ -62,3 +62,10 @@ jobs:
           TELCO_DELTA_PATH: "${{ runner.temp }}/telco_customer_churn_delta"
           DBT_DUCKDB_PATH: "${{ runner.temp }}/churn_analytics.duckdb"
         run: dbt build --project-dir dbt_project --profiles-dir dbt_project
+
+      - name: Train and track candidate models
+        env:
+          DBT_DUCKDB_PATH: "${{ runner.temp }}/churn_analytics.duckdb"
+          MLFLOW_TRACKING_URI: "sqlite:///${{ runner.temp }}/mlflow/mlflow.db"
+          MLFLOW_EXPERIMENT_NAME: "telco-customer-churn-ci"
+        run: python -m churn_platform.ml.train

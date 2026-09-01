@@ -14,8 +14,11 @@ dependencies = [
     "dbt-duckdb==1.11.0",
     "delta-spark==4.4.0",
     "httpx>=0.28,<1",
+    "mlflow==3.15.2",
     "pandas>=2.2,<3",
     "pyspark==4.2.0",
+    "scikit-learn==1.9.0",
+    "xgboost==3.4.1",
 ]
 
 [project.optional-dependencies]

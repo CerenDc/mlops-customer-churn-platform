@@ -45,6 +45,12 @@ dbt_project/.user.yml
 *.duckdb
 *.duckdb.wal
 
+# Local MLflow tracking and model artifacts
+data/mlflow/
+mlruns/
+mlartifacts/
+*.mlflow.db
+
 # IDE and operating system
 .DS_Store
 .idea/
