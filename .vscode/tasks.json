@@ -61,6 +61,25 @@
         "panel": "shared",
         "reveal": "always"
       }
+    },
+    {
+      "label": "Model Registry",
+      "type": "shell",
+      "command": "python -m churn_platform.ml.registry",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "clear": true,
+        "echo": true,
+        "focus": false,
+        "panel": "shared",
+        "reveal": "always"
+      }
     }
   ]
 }

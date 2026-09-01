@@ -1,7 +1,7 @@
 # MLOps Customer Churn Platform
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/status-V5-informational.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-V6-informational.svg)](#project-status)
 
 A portfolio project that incrementally builds a production-style, end-to-end
 MLOps platform for predicting customer churn.
@@ -34,10 +34,15 @@ flowchart TD
     H --> I[dbt feature mart<br/>data/features]
     I --> J[scikit-learn pipelines]
     J --> K[MLflow experiments<br/>data/mlflow]
+    K --> L[Selected candidate]
+    L --> M[MLflow Model Registry]
+    M --> N[Promotion gates]
+    N --> O[champion alias]
 ```
 
-V5 implements the data flow through reproducible model training and local
-experiment tracking. Serving and orchestration remain future work.
+V6 implements the data flow through reproducible training, experiment tracking,
+and controlled model lifecycle management. Serving and orchestration remain
+future work.
 
 ## Technology roadmap
 
@@ -48,9 +53,10 @@ experiment tracking. Serving and orchestration remain future work.
 | V2 | Reproducible data ingestion and validation | pandas, HTTPX |
 | V3 | Typed local processing and transactional storage | Apache Spark, Delta Lake |
 | V4 | SQL modeling, analytical quality, documentation, and lineage | dbt, DuckDB |
-| V5 (current) | Model training, evaluation, and experiment tracking | scikit-learn, XGBoost, MLflow |
-| V6 | Workflow orchestration | Airflow |
-| V7 | Packaging, serving, and observability | Docker, API framework, monitoring stack |
+| V5 | Model training, evaluation, and experiment tracking | scikit-learn, XGBoost, MLflow |
+| V6 (current) | Model versioning and champion/challenger lifecycle | MLflow Model Registry |
+| V7 | Workflow orchestration | Airflow |
+| V8 | Packaging, serving, and observability | Docker, API framework, monitoring stack |
 
 The roadmap is directional. Technology choices will be evaluated when their
 phase begins rather than installed in advance.
@@ -246,6 +252,65 @@ mlflow ui --backend-store-uri sqlite:///data/mlflow/mlflow.db \
 Then open `http://127.0.0.1:5000` and select the
 `telco-customer-churn` experiment.
 
+## V6 — MLflow Model Registry + champion/challenger
+
+Experiment Tracking records every training run, including its parameters,
+metrics, artifacts, and input dataset. Model Registry has a narrower lifecycle
+role: it versions selected models, preserves lineage metadata, and exposes
+stable aliases for approved and evaluating versions. V6 uses aliases only; it
+does not use MLflow's legacy model stages.
+
+```text
+selected experiment run
+        ↓
+complete logged pipeline
+        ↓
+registered model version
+        ↓
+challenger
+        ↓
+promotion gates
+   ┌────┴────┐
+ reject   promote
+   ↓          ↓
+champion   champion alias moves
+unchanged
+```
+
+The `challenger` is the latest selected candidate under evaluation. The
+`champion` is the currently approved version. ROC AUC is the primary ranking
+metric because it measures discrimination across classification thresholds.
+F1 and recall are guardrails so a small ROC AUC gain cannot hide materially
+worse practical churn detection.
+
+Bootstrap promotion requires minimum test ROC AUC, F1, and recall. Once a
+champion exists, a challenger must also achieve the configured minimum ROC AUC
+improvement without exceeding permitted F1 or recall regression. Configure the
+policy with `MODEL_MIN_TEST_ROC_AUC`, `MODEL_MIN_TEST_F1`,
+`MODEL_MIN_TEST_RECALL`, `MODEL_MIN_ROC_AUC_IMPROVEMENT`,
+`MODEL_MAX_F1_REGRESSION`, and `MODEL_MAX_RECALL_REGRESSION`.
+
+Run the complete manual workflow with:
+
+```bash
+python -m churn_platform.ingestion.telco
+python -m churn_platform.spark.transform_telco
+dbt build --project-dir dbt_project --profiles-dir dbt_project
+python -m churn_platform.ml.train
+python -m churn_platform.ml.registry
+```
+
+Manual stage execution remains intentional until orchestration is introduced.
+Later serving applications will load the stable URI below instead of knowing a
+specific version number:
+
+```text
+models:/telco-churn-classifier@champion
+```
+
+Moving the alias from version 1 to version 4 or 17 requires no serving-code
+change. Model serving itself is not implemented in V6.
+
 ## Repository layout
 
 ```text
@@ -262,8 +327,8 @@ docs/                 Project documentation
 
 ## Project status
 
-**V5 — model training + MLflow tracking.** Two reproducible classification
-pipelines are validation-compared, the winner is test-evaluated once, and all
-runs are tracked locally with reloadable model artifacts. Airflow, Docker,
-Databricks, model registry, tuning, serving, deployment, and monitoring are
-intentionally not implemented in this version.
+**V6 — MLflow Model Registry + Champion/Challenger.** Selected V5 models are
+versioned without retraining, evaluated by deterministic promotion gates, and
+resolved through stable `champion` and `challenger` aliases. Airflow, Docker,
+Databricks, serving, deployment, and monitoring are intentionally not
+implemented in this version.

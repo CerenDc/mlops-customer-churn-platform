@@ -69,3 +69,14 @@ jobs:
           MLFLOW_TRACKING_URI: "sqlite:///${{ runner.temp }}/mlflow/mlflow.db"
           MLFLOW_EXPERIMENT_NAME: "telco-customer-churn-ci"
         run: python -m churn_platform.ml.train
+
+      - name: Register, promote, and reload champion
+        env:
+          DBT_DUCKDB_PATH: "${{ runner.temp }}/churn_analytics.duckdb"
+          MLFLOW_TRACKING_URI: "sqlite:///${{ runner.temp }}/mlflow/mlflow.db"
+          MLFLOW_EXPERIMENT_NAME: "telco-customer-churn-ci"
+          MLFLOW_REGISTERED_MODEL_NAME: "telco-churn-classifier-ci"
+          MODEL_MIN_TEST_ROC_AUC: "0"
+          MODEL_MIN_TEST_F1: "0"
+          MODEL_MIN_TEST_RECALL: "0"
+        run: python -m churn_platform.ml.registry
