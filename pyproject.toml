@@ -10,7 +10,12 @@ readme = "README.md"
 requires-python = ">=3.13,<3.14"
 license = { text = "MIT" }
 authors = [{ name = "Project Contributors" }]
-dependencies = []
+dependencies = [
+    "delta-spark==4.4.0",
+    "httpx>=0.28,<1",
+    "pandas>=2.2,<3",
+    "pyspark==4.2.0",
+]
 
 [project.optional-dependencies]
 dev = [
@@ -25,6 +30,9 @@ packages = ["src/churn_platform"]
 addopts = "-ra"
 testpaths = ["tests"]
 pythonpath = ["src"]
+markers = [
+    "integration: tests requiring a local Java, Spark, and Delta runtime",
+]
 
 [tool.ruff]
 target-version = "py313"

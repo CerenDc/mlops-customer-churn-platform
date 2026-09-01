@@ -31,9 +31,16 @@ data/features/*
 !data/processed/.gitkeep
 !data/features/.gitkeep
 
+# Local Spark state
+spark-warehouse/
+metastore_db/
+derby.log
+.ivy2/
+
 # IDE and operating system
 .DS_Store
 .idea/
 .vscode/*
 !.vscode/settings.json
 !.vscode/extensions.json
+!.vscode/tasks.json

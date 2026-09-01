@@ -1,0 +1,28 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Quality Check",
+      "type": "shell",
+      "command": "ruff check . && ruff format --check . && pytest -q",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "clear": true,
+        "echo": true,
+        "focus": false,
+        "panel": "shared",
+        "reveal": "always"
+      },
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    }
+  ]
+}

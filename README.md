@@ -1,7 +1,7 @@
 # MLOps Customer Churn Platform
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/status-V1-informational.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-V3-informational.svg)](#project-status)
 
 A portfolio project that incrementally builds a production-style, end-to-end
 MLOps platform for predicting customer churn.
@@ -38,17 +38,17 @@ Ingestion -> Raw data -> Processing / feature engineering
                     Monitoring and retraining
 ```
 
-The `ingestion/`, `spark/`, and `ml/` directories are boundaries for future
-phases. V1 deliberately contains no pipeline, distributed processing, model
-training, serving, or infrastructure implementation.
+V3 implements the ingestion, raw, Spark processing, and Delta storage portion
+of this architecture. Modeling, serving, and orchestration remain future work.
 
 ## Technology roadmap
 
 | Phase | Planned focus | Candidate technologies |
 | --- | --- | --- |
-| V1 (current) | Python project foundation, linting, and tests | Python 3.13, pytest, Ruff |
-| V2 | Data ingestion and validation | Python, Pandera or Great Expectations |
-| V3 | Scalable transformation and feature engineering | Apache Spark |
+| V1 | Python project foundation, linting, and tests | Python 3.13, pytest, Ruff |
+| V1.1 | Developer automation and continuous integration | GitHub Actions, VS Code tasks |
+| V2 | Reproducible data ingestion and validation | pandas, HTTPX |
+| V3 (current) | Typed local processing and transactional storage | Apache Spark, Delta Lake |
 | V4 | Model training, evaluation, and experiment tracking | scikit-learn, MLflow |
 | V5 | Workflow orchestration and transformation management | Airflow, dbt |
 | V6 | Packaging, serving, CI/CD, and observability | Docker, API framework, monitoring stack |
@@ -58,7 +58,18 @@ phase begins rather than installed in advance.
 
 ## Local setup
 
-Prerequisites: Python 3.13 and Git.
+Prerequisites: Python 3.13, Java 17, and Git.
+
+On Apple Silicon macOS with Homebrew, install and expose Java 17 with:
+
+```bash
+brew install openjdk@17
+export JAVA_HOME="/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"
+export PATH="$JAVA_HOME/bin:$PATH"
+```
+
+Linux and CI environments may provide Java 17 through their normal JDK
+distribution. Confirm the active runtime with `java -version`.
 
 ```bash
 python3.13 -m venv .venv
@@ -73,28 +84,84 @@ Run the quality checks:
 ```bash
 pytest -q
 ruff check .
+ruff format --check .
 ```
 
 The `.env` file is ignored by Git. Do not store secrets in `.env.example`.
 
+The same checks can be launched in VS Code from **Tasks: Run Task** by choosing
+**Quality Check**.
+
+## Continuous integration
+
+GitHub Actions automatically validates Ruff linting, Ruff formatting, and the
+pytest suite for every push to `main` and every pull request targeting `main`.
+The workflow uses Python 3.13, Temurin Java 17, and cached Python dependencies.
+
+## V2 data ingestion
+
+V2 downloads the public IBM Telco Customer Churn CSV, validates its schema and
+key business constraints, and atomically saves the accepted file. Run it from
+the repository root after completing the local setup:
+
+```bash
+python -m churn_platform.ingestion.telco
+```
+
+The downloaded file is written to `data/raw/telco_customer_churn.csv`. Raw data
+is reproducible from the public source and can be large, so it is deliberately
+ignored by Git; only the `.gitkeep` placeholder is versioned.
+
+No cleaning, feature engineering, or model work occurs during ingestion.
+
+## V3 — Spark + Delta Lake
+
+Spark provides a distributed-style DataFrame processing model locally and
+prepares the project for processing patterns used on larger data platforms. V3
+uses an explicit schema, normalizes field types, safely parses `TotalCharges`,
+validates business constraints, and adds minimal lineage metadata.
+
+Delta Lake stores the processed data in data lake files with an ACID
+transaction log. This improves schema reliability and establishes a foundation
+for table versioning while remaining compatible with Spark. The same format is
+useful for a later Databricks phase, but Databricks is not implemented here.
+
+Run both independent pipeline stages from the repository root:
+
+```bash
+python -m churn_platform.ingestion.telco
+python -m churn_platform.spark.transform_telco
+```
+
+The processing command reads the immutable raw CSV and writes a genuine Delta
+table to `data/processed/telco_customer_churn_delta/`. Both generated datasets
+are ignored by Git.
+
+### Data layers
+
+| Layer | Location | Responsibility |
+| --- | --- | --- |
+| RAW | `data/raw/` | Original source data; treated as immutable |
+| PROCESSED | `data/processed/` | Typed, minimally cleaned data stored as Delta Lake |
+| FEATURES | `data/features/` | Reserved for later ML feature engineering |
+
 ## Repository layout
 
 ```text
-src/churn_platform/   Minimal installable Python package
+src/churn_platform/   Installable ingestion and Spark processing package
 tests/                Automated tests
 data/                 Raw, processed, and feature data zones
-ingestion/            Future ingestion implementation
-spark/                Future distributed processing implementation
 ml/                   Future modeling implementation
 notebooks/            Exploratory notebooks
 docs/                 Project documentation
-.github/workflows/    Future CI workflows
+.github/workflows/    GitHub Actions continuous integration
 .vscode/              Shared editor configuration
 ```
 
 ## Project status
 
-**V1 — project foundation.** The Python 3.13 package structure, pytest suite,
-Ruff configuration, environment template, and editor recommendations are in
-place. Airflow, Spark, dbt, MLflow, and Docker are intentionally not installed
-or configured in this version.
+**V3 — Spark + Delta Lake.** The platform processes the immutable IBM Telco raw
+CSV through a typed, validated Spark transformation and publishes a real Delta
+Lake dataset with technical lineage metadata. dbt, Airflow, MLflow, Docker,
+Databricks, feature engineering, model training, and serving are intentionally
+not implemented in this version.
