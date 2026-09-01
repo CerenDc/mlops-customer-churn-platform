@@ -10,17 +10,16 @@ import pytest
 from pyspark.sql import DataFrame, SparkSession
 from pyspark.sql.types import DoubleType, IntegerType
 
+from churn_platform.spark.create_test_fixture import create_synthetic_delta_fixture
 from churn_platform.spark.session import create_spark_session
 from churn_platform.spark.transform_telco import (
     BUSINESS_COLUMNS,
     TECHNICAL_COLUMNS,
     TELCO_RAW_SCHEMA,
     SparkDataValidationError,
-    add_technical_metadata,
     read_raw_telco,
     transform_telco,
     validate_transformed_telco,
-    write_delta,
 )
 
 pytestmark = pytest.mark.integration
@@ -113,10 +112,8 @@ def write_raw_csv(path: Path) -> Path:
 def delta_output(spark: SparkSession, tmp_path_factory: pytest.TempPathFactory) -> Path:
     """Write one real Delta dataset reused by read-back assertions."""
     output_path = tmp_path_factory.mktemp("delta-output") / "telco"
-    transformed = transform_telco(raw_dataframe(spark))
-    row_count = validate_transformed_telco(transformed, input_row_count=2)
-    enriched = add_technical_metadata(transformed, Path("synthetic.csv"))
-    write_delta(spark, enriched, output_path, expected_rows=row_count)
+    row_count = create_synthetic_delta_fixture(output_path, spark=spark)
+    assert row_count == 2
     return output_path
 
 

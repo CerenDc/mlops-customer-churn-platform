@@ -1,0 +1,20 @@
+version: 2
+
+models:
+  - name: int_telco_customer_metrics
+    description: >-
+      Reusable customer-grain business calculations derived from the staging
+      model without encoding categories or imputing missing values.
+    columns:
+      - name: customer_id
+        description: Stable customer identifier and model grain.
+      - name: service_count
+        description: >-
+          Count of subscribed phone, internet, and optional digital services;
+          bounded from zero through nine.
+      - name: monthly_to_total_charge_ratio
+        description: >-
+          Monthly charge divided by lifetime charges, returning null when total
+          charges are zero or missing.
+      - name: tenure_group
+        description: Human-readable customer tenure band.

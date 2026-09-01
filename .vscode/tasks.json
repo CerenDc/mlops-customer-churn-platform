@@ -23,6 +23,25 @@
         "kind": "test",
         "isDefault": true
       }
+    },
+    {
+      "label": "dbt Build",
+      "type": "shell",
+      "command": "dbt build --project-dir dbt_project --profiles-dir dbt_project",
+      "options": {
+        "cwd": "${workspaceFolder}",
+        "env": {
+          "PATH": "${workspaceFolder}/.venv/bin:${env:PATH}"
+        }
+      },
+      "problemMatcher": [],
+      "presentation": {
+        "clear": true,
+        "echo": true,
+        "focus": false,
+        "panel": "shared",
+        "reveal": "always"
+      }
     }
   ]
 }

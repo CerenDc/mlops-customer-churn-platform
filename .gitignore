@@ -37,6 +37,14 @@ metastore_db/
 derby.log
 .ivy2/
 
+# dbt and DuckDB generated artifacts
+dbt_project/target/
+dbt_project/logs/
+dbt_project/dbt_packages/
+dbt_project/.user.yml
+*.duckdb
+*.duckdb.wal
+
 # IDE and operating system
 .DS_Store
 .idea/

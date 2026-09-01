@@ -1,0 +1,59 @@
+version: 2
+
+sources:
+  - name: processed
+    description: Spark-produced, typed Telco customer data stored as Delta Lake.
+    tables:
+      - name: telco_customers
+        description: >-
+          Customer-grain processed dataset produced by the V3 Spark pipeline.
+          DuckDB reads the Delta transaction log directly.
+        config:
+          external_location: >-
+            delta_scan('{{ env_var("TELCO_DELTA_PATH", "data/processed/telco_customer_churn_delta") }}')
+
+models:
+  - name: stg_telco_customers
+    description: >-
+      SQL-friendly projection of the Spark Delta source. It preserves all
+      customers and business attributes, adds a documented binary churn flag,
+      and retains Spark lineage metadata.
+    columns:
+      - name: customer_id
+        description: Stable customer identifier and grain of the dataset.
+        data_tests:
+          - not_null
+          - unique
+      - name: churn
+        description: Original human-readable churn outcome from the source.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["Yes", "No"]
+      - name: churn_flag
+        description: Analytical target representation where Yes is 1 and No is 0.
+      - name: senior_citizen
+        description: Indicator identifying whether the customer is a senior citizen.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+      - name: tenure
+        description: Number of months the customer has remained with the company.
+      - name: monthly_charges
+        description: Current monthly charge for the customer's services.
+        data_tests:
+          - not_null
+      - name: total_charges
+        description: Lifetime charges; null is preserved when absent in the source.
+      - name: contract
+        description: Customer contract duration category.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ["Month-to-month", "One year", "Two year"]
+      - name: _processed_at
+        description: Timestamp when Spark created the processed record.
+      - name: _source_file
+        description: Raw source path recorded by the Spark processing layer.

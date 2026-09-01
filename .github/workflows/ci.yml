@@ -45,3 +45,20 @@ jobs:
 
       - name: Run tests
         run: pytest -q
+
+      - name: Create synthetic Delta fixture
+        run: >-
+          python -m churn_platform.spark.create_test_fixture
+          --output "${{ runner.temp }}/telco_customer_churn_delta"
+
+      - name: Validate dbt connection
+        env:
+          TELCO_DELTA_PATH: "${{ runner.temp }}/telco_customer_churn_delta"
+          DBT_DUCKDB_PATH: "${{ runner.temp }}/churn_analytics.duckdb"
+        run: dbt debug --project-dir dbt_project --profiles-dir dbt_project
+
+      - name: Build and test dbt project
+        env:
+          TELCO_DELTA_PATH: "${{ runner.temp }}/telco_customer_churn_delta"
+          DBT_DUCKDB_PATH: "${{ runner.temp }}/churn_analytics.duckdb"
+        run: dbt build --project-dir dbt_project --profiles-dir dbt_project

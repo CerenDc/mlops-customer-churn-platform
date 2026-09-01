@@ -1,0 +1,10 @@
+churn_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('DBT_DUCKDB_PATH', 'data/features/churn_analytics.duckdb') }}"
+      schema: main
+      threads: 2
+      extensions:
+        - delta

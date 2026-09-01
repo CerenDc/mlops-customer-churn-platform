@@ -1,7 +1,7 @@
 # MLOps Customer Churn Platform
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/status-V3-informational.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-V4-informational.svg)](#project-status)
 
 A portfolio project that incrementally builds a production-style, end-to-end
 MLOps platform for predicting customer churn.
@@ -20,26 +20,22 @@ features, trains and evaluates churn models, deploys predictions, and monitors
 data and model quality. Each capability will be introduced in a small,
 testable version so the operational decisions remain understandable.
 
-## Planned architecture
+## Architecture
 
-```text
-Data sources
-    |
-    v
-Ingestion -> Raw data -> Processing / feature engineering
-                              |
-                              v
-                    Model training and evaluation
-                              |
-                              v
-                    Model registry and serving
-                              |
-                              v
-                    Monitoring and retraining
+```mermaid
+flowchart TD
+    A[IBM Telco CSV] --> B[Python ingestion]
+    B --> C[RAW<br/>data/raw]
+    C --> D[Apache Spark]
+    D --> E[Delta Lake<br/>data/processed]
+    E -->|delta_scan| F[DuckDB]
+    F --> G[dbt staging]
+    G --> H[dbt intermediate]
+    H --> I[dbt feature mart<br/>data/features]
 ```
 
-V3 implements the ingestion, raw, Spark processing, and Delta storage portion
-of this architecture. Modeling, serving, and orchestration remain future work.
+V4 implements this data-engineering and analytical flow. Model training,
+serving, and orchestration remain future work.
 
 ## Technology roadmap
 
@@ -48,10 +44,11 @@ of this architecture. Modeling, serving, and orchestration remain future work.
 | V1 | Python project foundation, linting, and tests | Python 3.13, pytest, Ruff |
 | V1.1 | Developer automation and continuous integration | GitHub Actions, VS Code tasks |
 | V2 | Reproducible data ingestion and validation | pandas, HTTPX |
-| V3 (current) | Typed local processing and transactional storage | Apache Spark, Delta Lake |
-| V4 | Model training, evaluation, and experiment tracking | scikit-learn, MLflow |
-| V5 | Workflow orchestration and transformation management | Airflow, dbt |
-| V6 | Packaging, serving, CI/CD, and observability | Docker, API framework, monitoring stack |
+| V3 | Typed local processing and transactional storage | Apache Spark, Delta Lake |
+| V4 (current) | SQL modeling, analytical quality, documentation, and lineage | dbt, DuckDB |
+| V5 | Model training, evaluation, and experiment tracking | scikit-learn, MLflow |
+| V6 | Workflow orchestration | Airflow |
+| V7 | Packaging, serving, and observability | Docker, API framework, monitoring stack |
 
 The roadmap is directional. Technology choices will be evaluated when their
 phase begins rather than installed in advance.
@@ -97,6 +94,8 @@ The same checks can be launched in VS Code from **Tasks: Run Task** by choosing
 GitHub Actions automatically validates Ruff linting, Ruff formatting, and the
 pytest suite for every push to `main` and every pull request targeting `main`.
 The workflow uses Python 3.13, Temurin Java 17, and cached Python dependencies.
+It also creates a two-row synthetic Delta table and runs a genuine DuckDB/dbt
+build without downloading the public dataset.
 
 ## V2 data ingestion
 
@@ -143,12 +142,72 @@ are ignored by Git.
 | --- | --- | --- |
 | RAW | `data/raw/` | Original source data; treated as immutable |
 | PROCESSED | `data/processed/` | Typed, minimally cleaned data stored as Delta Lake |
-| FEATURES | `data/features/` | Reserved for later ML feature engineering |
+| FEATURES | `data/features/` | Customer-grain analytical feature mart built by dbt |
+
+## V4 — dbt + DuckDB + Data Quality
+
+Spark and dbt have complementary responsibilities. Spark performs scalable,
+programmatic raw-to-processed work: schema enforcement, type normalization,
+structural validation, and Delta Lake publication. dbt performs
+processed-to-analytical work: SQL business transformations, relational
+modeling, tests, documentation, and lineage. The dbt layer does not repeat the
+Spark cleaning logic.
+
+DuckDB is the local dbt engine because it is embedded, fast, free, and requires
+no service infrastructure. Its official Delta extension reads the Spark table
+directly with `delta_scan()`. DuckDB is a practical local analytical engine,
+not a claim that every production cloud warehouse should be replaced by it.
+
+The dbt lineage is:
+
+```text
+Delta source
+    ↓
+stg_telco_customers (view)
+    ↓
+int_telco_customer_metrics (view)
+    ↓
+fct_customer_churn_features (table)
+```
+
+The staging view provides snake_case names and adds `churn_flag`. The
+intermediate view adds a small set of explainable business metrics. The final
+table excludes Spark lineage columns and forms the customer-level contract for
+later model training. It does not one-hot encode, scale, or impute features.
+
+Run dbt from the repository root without a global profile:
+
+```bash
+dbt debug --project-dir dbt_project --profiles-dir dbt_project
+dbt build --project-dir dbt_project --profiles-dir dbt_project
+dbt test --project-dir dbt_project --profiles-dir dbt_project
+dbt docs generate --project-dir dbt_project --profiles-dir dbt_project
+```
+
+`TELCO_DELTA_PATH` can override the Delta source, and `DBT_DUCKDB_PATH` can
+override the generated database path. Local defaults point to
+`data/processed/telco_customer_churn_delta` and
+`data/features/churn_analytics.duckdb`. Generated dbt and DuckDB artifacts are
+ignored by Git.
+
+### Derived analytical features
+
+| Feature | Definition |
+| --- | --- |
+| `churn_flag` | `1` for `Yes`, `0` for `No`; original `churn` is retained |
+| `has_internet` | `1` when internet service is not `No` |
+| `has_phone` | `1` when phone service is `Yes` |
+| `service_count` | Count of subscribed phone, internet, and optional digital services |
+| `is_month_to_month` | `1` for a month-to-month contract |
+| `has_long_term_contract` | `1` for a one-year or two-year contract |
+| `monthly_to_total_charge_ratio` | Monthly charges divided by nonzero total charges |
+| `tenure_group` | Human-readable tenure band from no tenure through 49+ months |
 
 ## Repository layout
 
 ```text
 src/churn_platform/   Installable ingestion and Spark processing package
+dbt_project/          SQL models, tests, documentation, and local profile
 tests/                Automated tests
 data/                 Raw, processed, and feature data zones
 ml/                   Future modeling implementation
@@ -160,8 +219,7 @@ docs/                 Project documentation
 
 ## Project status
 
-**V3 — Spark + Delta Lake.** The platform processes the immutable IBM Telco raw
-CSV through a typed, validated Spark transformation and publishes a real Delta
-Lake dataset with technical lineage metadata. dbt, Airflow, MLflow, Docker,
-Databricks, feature engineering, model training, and serving are intentionally
-not implemented in this version.
+**V4 — dbt + DuckDB + Data Quality.** DuckDB reads the Spark-produced Delta
+table directly, and dbt builds a tested, documented, customer-grain analytical
+feature table. Airflow, MLflow, Docker, Databricks, model training, and serving
+are intentionally not implemented in this version.

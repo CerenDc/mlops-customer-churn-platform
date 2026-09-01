@@ -1,0 +1,41 @@
+version: 2
+
+models:
+  - name: fct_customer_churn_features
+    description: >-
+      One-row-per-customer analytical contract between data engineering and
+      future ML training. Categorical attributes remain human-readable.
+    columns:
+      - name: customer_id
+        description: Stable, unique customer identifier and table grain.
+        data_tests:
+          - not_null
+          - unique
+      - name: churn
+        description: Original human-readable churn target, Yes or No.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ["Yes", "No"]
+      - name: churn_flag
+        description: Binary churn target where Yes is 1 and No is 0.
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: [0, 1]
+      - name: tenure
+        description: Number of months the customer has remained with the company.
+      - name: monthly_charges
+        description: Current monthly charge for the customer's services.
+      - name: total_charges
+        description: Lifetime charges, retaining source nulls without imputation.
+      - name: service_count
+        description: Count of subscribed phone, internet, and digital services.
+        data_tests:
+          - not_null
+      - name: monthly_to_total_charge_ratio
+        description: Monthly charge divided by nonzero total charges.
+      - name: tenure_group
+        description: Human-readable customer tenure band.
