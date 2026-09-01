@@ -19,7 +19,6 @@ from churn_platform.ml.promotion import (
     evaluate_promotion,
 )
 from churn_platform.ml.tracking import (
-    DEFAULT_EXPERIMENT_NAME,
     configure_mlflow,
 )
 
@@ -153,9 +152,7 @@ def run_registry_lifecycle(
     database_path: Path | None = None,
 ) -> RegistryResult:
     """Register/reuse the latest selected run and apply alias-based promotion."""
-    uri, _, experiment_id = configure_mlflow(
-        tracking_uri, experiment_name or DEFAULT_EXPERIMENT_NAME
-    )
+    uri, _, experiment_id = configure_mlflow(tracking_uri, experiment_name)
     name = registered_model_name or os.getenv(
         "MLFLOW_REGISTERED_MODEL_NAME", DEFAULT_REGISTERED_MODEL_NAME
     )

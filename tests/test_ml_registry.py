@@ -202,3 +202,22 @@ def test_lifecycle_validates_champion_predictions(
 ) -> None:
     assert registry_scenario.first.champion_prediction_count == 5
     assert set(registry_scenario.first.champion_predictions) <= {0, 1}
+
+
+def test_lifecycle_honors_configured_experiment_environment(
+    registry_scenario: RegistryScenario,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression for CI where the experiment name differs from the default."""
+    monkeypatch.setenv("MLFLOW_TRACKING_URI", registry_scenario.tracking_uri)
+    monkeypatch.setenv("MLFLOW_EXPERIMENT_NAME", "registry-integration-test")
+    monkeypatch.setenv("MLFLOW_REGISTERED_MODEL_NAME", "environment-configured-model")
+
+    result = run_registry_lifecycle(
+        policy=PromotionPolicy(0, 0, 0, 0, 1, 1),
+        database_path=registry_scenario.database_path,
+    )
+
+    assert result.registered_model_name == "environment-configured-model"
+    assert result.source_run_id == registry_scenario.replacement.source_run_id
+    assert result.champion_version == "1"
