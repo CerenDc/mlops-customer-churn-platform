@@ -1,7 +1,8 @@
 # MLOps Customer Churn Platform
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
-[![Status](https://img.shields.io/badge/status-V7-informational.svg)](#project-status)
+[![CI](https://github.com/CerenDc/mlops-customer-churn-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/CerenDc/mlops-customer-churn-platform/actions/workflows/ci.yml)
+[![Status](https://img.shields.io/badge/status-V8-informational.svg)](#project-status)
 
 A portfolio project that incrementally builds a production-style, end-to-end
 MLOps platform for predicting customer churn.
@@ -59,8 +60,9 @@ data, training, and lifecycle components. Serving remains future work.
 | V4 | SQL modeling, analytical quality, documentation, and lineage | dbt, DuckDB |
 | V5 | Model training, evaluation, and experiment tracking | scikit-learn, XGBoost, MLflow |
 | V6 | Model versioning and champion/challenger lifecycle | MLflow Model Registry |
-| V7 (current) | Workflow orchestration | Apache Airflow 3 |
-| V8 | Packaging, serving, and observability | Docker, API framework, monitoring stack |
+| V7 | Workflow orchestration | Apache Airflow 3 |
+| V8 (current) | CI/CD industrialization | GitHub Actions, synthetic integration pipeline |
+| V9 | Packaging, serving, and observability | Docker, API framework, monitoring stack |
 
 The roadmap is directional. Technology choices will be evaluated when their
 phase begins rather than installed in advance.
@@ -107,14 +109,26 @@ The `.env` file is ignored by Git. Do not store secrets in `.env.example`.
 The same checks can be launched in VS Code from **Tasks: Run Task** by choosing
 **Quality Check**.
 
-## Continuous integration
+## Continuous Integration
 
-GitHub Actions automatically validates Ruff linting, Ruff formatting, and the
-pytest suite for every push to `main` and every pull request targeting `main`.
-The workflow uses Python 3.13, Temurin Java 17, and cached Python dependencies.
-It initializes a temporary Airflow SQLite backend and executes one genuine
-offline DAG run from synthetic RAW CSV through Spark, Delta, dbt, MLflow,
-Model Registry, champion promotion, reload, and prediction.
+The [`.github/workflows/ci.yml`](.github/workflows/ci.yml) workflow validates
+pull requests targeting `main` and pushes to `develop`, `feature/**`, and
+`fix/**`. It checks Python imports, Ruff linting and formatting, the pytest
+suite, Spark with Delta Lake, dbt models and tests, ML training, MLflow
+tracking, the Model Registry lifecycle, and Airflow DAG integrity. One genuine
+Airflow run then exercises the complete synthetic pipeline from RAW data to
+champion-model reload and prediction, without external datasets or services.
+
+CI uses Python 3.13, Temurin Java 17, pip caching, isolated runner-temporary
+paths, a local DuckDB feature mart, and an SQLite MLflow backend. Obsolete runs
+on the same branch or pull request are cancelled automatically. Real-data
+execution remains separate and available locally with:
+
+```bash
+CHURN_PIPELINE_USE_SYNTHETIC_DATA=false airflow dags test \
+  mlops_customer_churn_pipeline \
+  --dagfile-path "$PWD/orchestration/dags/churn_mlops_pipeline.py"
+```
 
 ## V2 data ingestion
 
@@ -401,8 +415,9 @@ docs/                 Project documentation
 
 ## Project status
 
-**V7 — Apache Airflow Orchestration.** A manually triggered Airflow 3 DAG now
-coordinates ingestion, Spark, dbt, training, registry lifecycle, and champion
-verification through their existing CLIs. Docker, PostgreSQL, distributed
+**V8 — CI/CD Industrialization.** GitHub Actions now validates code quality,
+component tests, Spark/Delta, dbt, MLflow, the Model Registry, Airflow DAG
+integrity, and a complete synthetic MLOps run. The validated V7 orchestration
+and local real-data mode remain unchanged. Docker, PostgreSQL, distributed
 executors, serving, deployment, and monitoring are intentionally not
 implemented in this version.
