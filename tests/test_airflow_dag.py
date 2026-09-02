@@ -17,6 +17,7 @@ from churn_platform.orchestration.config import (
 )
 
 DAG_PATH = Path("orchestration/dags/churn_mlops_pipeline.py").resolve()
+MONITORING_DAG_PATH = Path("orchestration/dags/churn_monitoring_pipeline.py").resolve()
 EXPECTED_CHAIN = (
     "prepare_raw_data",
     "spark_processing",
@@ -44,6 +45,19 @@ def churn_dag(tmp_path_factory: pytest.TempPathFactory):
 def test_dag_imports_with_expected_identity(churn_dag) -> None:
     assert churn_dag.dag_id == "mlops_customer_churn_pipeline"
     assert set(churn_dag.task_ids) == set(EXPECTED_CHAIN)
+
+
+def test_monitoring_dag_is_independent_and_importable(tmp_path: Path) -> None:
+    spec = importlib.util.spec_from_file_location(
+        "tested_monitoring_dag", MONITORING_DAG_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    with pytest.MonkeyPatch.context() as monkeypatch:
+        monkeypatch.setenv("AIRFLOW_HOME", str(tmp_path))
+        spec.loader.exec_module(module)
+    assert module.dag.dag_id == "churn_model_monitoring"
+    assert set(module.dag.task_ids) == {"evaluate_drift"}
 
 
 def test_dag_manual_schedule_and_concurrency(churn_dag) -> None:

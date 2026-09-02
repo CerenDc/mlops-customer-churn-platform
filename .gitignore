@@ -48,6 +48,8 @@ dbt_project/.user.yml
 
 # Local MLflow tracking and model artifacts
 data/mlflow/
+data/monitoring/
+artifacts/monitoring/
 mlruns/
 mlartifacts/
 *.mlflow.db

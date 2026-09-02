@@ -1,0 +1,31 @@
+{
+  "annotations": {"list": []},
+  "editable": false,
+  "graphTooltip": 1,
+  "panels": [
+    {"type": "stat", "title": "Monitoring Status (0 healthy, 1 warning, 2 critical)", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_monitoring_status", "refId": "A"}], "gridPos": {"h": 4, "w": 6, "x": 0, "y": 0}},
+    {"type": "stat", "title": "Dataset Drift", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_data_drift_detected", "refId": "A"}], "gridPos": {"h": 4, "w": 6, "x": 6, "y": 0}},
+    {"type": "stat", "title": "Drift Share", "datasource": {"type": "prometheus", "uid": "prometheus"}, "fieldConfig": {"defaults": {"unit": "percentunit"}, "overrides": []}, "targets": [{"expr": "churn_data_drift_share", "refId": "A"}], "gridPos": {"h": 4, "w": 6, "x": 12, "y": 0}},
+    {"type": "stat", "title": "Feature Rows", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_data_feature_rows", "refId": "A"}], "gridPos": {"h": 4, "w": 6, "x": 18, "y": 0}},
+    {"type": "stat", "title": "Champion Version", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_model_champion_info", "legendFormat": "{{model}} v{{version}}", "refId": "A"}], "gridPos": {"h": 4, "w": 8, "x": 0, "y": 4}},
+    {"type": "stat", "title": "Current ROC-AUC", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_model_current_roc_auc", "refId": "A"}], "gridPos": {"h": 4, "w": 8, "x": 8, "y": 4}},
+    {"type": "stat", "title": "Current F1", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_model_current_f1", "refId": "A"}], "gridPos": {"h": 4, "w": 8, "x": 16, "y": 4}},
+    {"type": "barchart", "title": "Feature Drift Detection", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_feature_drift_detected", "legendFormat": "{{feature}}", "refId": "A"}], "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8}},
+    {"type": "barchart", "title": "Feature Drift Scores", "description": "Score semantics depend on the bounded method label; default p-values below 0.05 indicate drift.", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_feature_drift_score", "legendFormat": "{{feature}} ({{method}})", "refId": "A"}], "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8}},
+    {"type": "stat", "title": "Pipeline Runs", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_pipeline_runs_total", "refId": "A"}], "gridPos": {"h": 4, "w": 6, "x": 0, "y": 16}},
+    {"type": "stat", "title": "Successful Runs", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_pipeline_success_total", "refId": "A"}], "gridPos": {"h": 4, "w": 6, "x": 6, "y": 16}},
+    {"type": "stat", "title": "Failed Runs", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_pipeline_failures_total", "refId": "A"}], "gridPos": {"h": 4, "w": 6, "x": 12, "y": 16}},
+    {"type": "timeseries", "title": "Stage Durations", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_pipeline_stage_duration_seconds", "legendFormat": "{{stage}}", "refId": "A"}], "gridPos": {"h": 8, "w": 6, "x": 18, "y": 16}},
+    {"type": "stat", "title": "dbt Tests Passed", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_dbt_tests_passed", "refId": "A"}], "gridPos": {"h": 4, "w": 9, "x": 0, "y": 20}},
+    {"type": "stat", "title": "dbt Tests Failed", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_dbt_tests_failed", "refId": "A"}], "gridPos": {"h": 4, "w": 9, "x": 9, "y": 20}}
+  ],
+  "refresh": "15s",
+  "schemaVersion": 41,
+  "tags": ["mlops", "churn", "drift"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "Customer Churn MLOps Overview",
+  "uid": "churn-mlops-overview",
+  "version": 1
+}

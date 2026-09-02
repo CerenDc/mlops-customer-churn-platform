@@ -2,7 +2,7 @@
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/CerenDc/mlops-customer-churn-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/CerenDc/mlops-customer-churn-platform/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/status-V10-informational.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-V11-informational.svg)](#project-status)
 
 A portfolio project that incrementally builds a production-style, end-to-end
 MLOps platform for predicting customer churn.
@@ -63,8 +63,9 @@ data, training, and lifecycle components. Serving remains future work.
 | V7 | Workflow orchestration | Apache Airflow 3 |
 | V8 | CI/CD industrialization | GitHub Actions, synthetic integration pipeline |
 | V9 | Reproducible local platform | Docker, Docker Compose, PostgreSQL |
-| V10 (current) | Local Kubernetes deployment | kind, kubectl, Kustomize |
-| V11 | Serving and observability | API framework, monitoring stack |
+| V10 | Local Kubernetes deployment | kind, kubectl, Kustomize |
+| V11 (current) | MLOps observability and drift | Prometheus, Grafana, Evidently |
+| V12 | Serving and cloud deployment | API framework, cloud platform |
 
 The roadmap is directional. Technology choices will be evaluated when their
 phase begins rather than installed in advance.
@@ -361,6 +362,118 @@ kind delete cluster --name churn-mlops
 
 Deleting the kind cluster also removes its local PVC data.
 
+## Monitoring & Observability
+
+V11 adds a focused local monitoring layer without changing the training DAG or
+promotion policy:
+
+- Airflow remains responsible for workflow orchestration.
+- MLflow remains the source of experiment, model and registry history.
+- Evidently compares bounded feature distributions and produces HTML/JSON
+  reports.
+- The metrics exporter publishes the latest persistent monitoring snapshot in
+  Prometheus format.
+- Prometheus stores the operational time series.
+- Grafana visualizes drift, data volume, dbt quality and champion performance.
+
+```mermaid
+flowchart TD
+    A[Airflow training pipeline] --> M[MLflow + Champion]
+    A --> D[Feature mart]
+    D --> E[Evidently monitoring]
+    M --> E
+    E --> R[HTML + JSON report]
+    E --> X[Metrics exporter]
+    X --> P[Prometheus]
+    P --> G[Grafana dashboard]
+```
+
+The training graph remains unchanged. Monitoring has its own manual Airflow DAG,
+`churn_model_monitoring`, because model training and production monitoring
+normally have different schedules.
+
+### Run monitoring locally
+
+Run the data pipeline through champion promotion first. A normal comparison
+uses the existing dbt feature mart as both the known-good reference and current
+dataset:
+
+```bash
+python -m churn_platform.monitoring.run --scenario normal
+```
+
+Generate a deterministic drift demonstration by shifting `tenure`,
+`monthly_charges`, `contract`, and `payment_method` while preserving the feature
+schema and labels:
+
+```bash
+python -m churn_platform.monitoring.run --scenario drifted
+```
+
+Reports are written under:
+
+```text
+data/monitoring/normal/data_drift_report.html
+data/monitoring/normal/data_drift_report.json
+data/monitoring/drifted/data_drift_report.html
+data/monitoring/drifted/data_drift_report.json
+```
+
+The latest metrics snapshot is `data/monitoring/metrics.json`. Evidently uses
+its default column-level tests: numeric features normally use a two-sample KS
+p-value and categorical features use an appropriate categorical p-value test.
+A feature is drifted when its p-value is below `0.05`. Dataset drift is reported
+when at least 50% of monitored features drift.
+
+When ground-truth `churn_flag` values and an MLflow champion are available, the
+same evaluation implementation calculates reference/current accuracy,
+precision, recall, F1 and ROC-AUC. A ROC-AUC drop greater than `0.05` produces
+`RETRAIN_RECOMMENDED`; drift without measured degradation produces
+`INVESTIGATE`. Monitoring never changes the champion alias.
+
+Data drift does not necessarily mean the model is bad. Model performance
+degradation requires ground-truth evaluation; without labels, V11 reports only
+distribution drift.
+
+### Monitoring services
+
+Start the complete Compose platform and run monitoring inside the scheduler:
+
+```bash
+docker compose up -d
+docker compose exec airflow-scheduler \
+  python -m churn_platform.monitoring.run --scenario normal
+docker compose exec airflow-scheduler \
+  python -m churn_platform.monitoring.run --scenario drifted
+```
+
+Local interfaces:
+
+- Metrics: <http://localhost:8000/metrics>
+- Prometheus: <http://localhost:9090>
+- Grafana: <http://localhost:3000>
+
+Grafana uses local-only credentials `admin` / `grafana-dev-only`, configurable
+through `.env`. Its provisioned Prometheus datasource and **Customer Churn
+MLOps Overview** dashboard require no UI setup. Panels show monitoring status,
+feature rows, dataset drift/share, champion version, current ROC-AUC/F1,
+feature-level drift and dbt test results.
+
+For Kubernetes, deploy the existing overlay and port-forward the monitoring
+services:
+
+```bash
+kubectl port-forward service/metrics-exporter 8000:8000 -n churn-mlops
+kubectl port-forward service/prometheus 9090:9090 -n churn-mlops
+kubectl port-forward service/grafana 3000:3000 -n churn-mlops
+kubectl exec deployment/airflow-scheduler -n churn-mlops -- \
+  airflow dags trigger churn_model_monitoring
+```
+
+Prometheus and Grafana have dedicated PVCs. Dashboard and datasource definitions
+remain declarative in `monitoring/` and are copied from the shared application
+image during Kubernetes pod initialization.
+
 ## V2 data ingestion
 
 V2 downloads the public IBM Telco Customer Churn CSV, validates its schema and
@@ -636,6 +749,7 @@ src/churn_platform/   Installable ingestion, Spark, ML, and orchestration helper
 orchestration/dags/   Airflow DAG definitions
 dbt_project/          SQL models, tests, documentation, and local profile
 k8s/                  Reusable Kubernetes base and local kind overlay
+monitoring/           Prometheus and declarative Grafana configuration
 Dockerfile            Shared Python 3.13 and Java 17 runtime image
 docker-compose.yml    Local Docker Compose platform
 tests/                Automated tests
@@ -649,10 +763,10 @@ docs/                 Project documentation
 
 ## Project status
 
-**V10 — Kubernetes Industrialization.** The V9 Python 3.13 and Java 17 image now
-deploys through Kustomize to a local kind cluster. Kubernetes provides
-health-checked Airflow, MLflow and PostgreSQL workloads, deterministic Airflow
-database migration, services, resource bounds and persistent claims while the
-existing six-task DAG remains unchanged. Host and Docker Compose execution stay
-supported. Cloud deployment, multi-node HA, ingress, serving and monitoring are
-intentionally outside this version.
+**V11 — MLOps Observability, Model Monitoring & Data Drift.** Evidently now
+generates reproducible drift reports and optional ground-truth champion
+evaluations. A lightweight exporter publishes bounded metrics to Prometheus,
+and the provisioned Grafana dashboard visualizes operational monitoring under
+both Docker Compose and Kubernetes. Monitoring recommends investigation or
+retraining but never promotes a model. Host, real-data, synthetic, Compose and
+Kubernetes execution remain supported.
