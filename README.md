@@ -2,7 +2,7 @@
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/CerenDc/mlops-customer-churn-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/CerenDc/mlops-customer-churn-platform/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/status-V8-informational.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-V9-informational.svg)](#project-status)
 
 A portfolio project that incrementally builds a production-style, end-to-end
 MLOps platform for predicting customer churn.
@@ -61,8 +61,9 @@ data, training, and lifecycle components. Serving remains future work.
 | V5 | Model training, evaluation, and experiment tracking | scikit-learn, XGBoost, MLflow |
 | V6 | Model versioning and champion/challenger lifecycle | MLflow Model Registry |
 | V7 | Workflow orchestration | Apache Airflow 3 |
-| V8 (current) | CI/CD industrialization | GitHub Actions, synthetic integration pipeline |
-| V9 | Packaging, serving, and observability | Docker, API framework, monitoring stack |
+| V8 | CI/CD industrialization | GitHub Actions, synthetic integration pipeline |
+| V9 (current) | Reproducible local platform | Docker, Docker Compose, PostgreSQL |
+| V10 | Serving and observability | API framework, monitoring stack |
 
 The roadmap is directional. Technology choices will be evaluated when their
 phase begins rather than installed in advance.
@@ -129,6 +130,110 @@ CHURN_PIPELINE_USE_SYNTHETIC_DATA=false airflow dags test \
   mlops_customer_churn_pipeline \
   --dagfile-path "$PWD/orchestration/dags/churn_mlops_pipeline.py"
 ```
+
+## Docker / Local Platform
+
+Docker Compose packages the existing pipeline without changing its execution
+graph. Spark, dbt, training, and registry commands run inside the shared Python
+image under Airflow's `LocalExecutor`; no standalone Spark cluster is needed.
+PostgreSQL stores only Airflow metadata. DuckDB remains the analytical engine,
+and MLflow uses a persistent SQLite backend plus a shared artifact directory.
+
+```mermaid
+flowchart TD
+    C[Docker Compose] --> P[(PostgreSQL<br/>Airflow metadata)]
+    C --> A[Airflow API, scheduler,<br/>and DAG processor]
+    C --> M[MLflow tracking server]
+    A --> R[Shared Python 3.13 runtime]
+    R --> S[Spark + Delta]
+    S --> D[dbt + DuckDB]
+    D --> T[ML training]
+    T --> M
+    M --> G[Model Registry<br/>champion alias]
+    R <-->|shared data volume| M
+```
+
+### Requirements
+
+- Docker Desktop or Docker Engine
+- Docker Compose v2
+
+### Setup
+
+The example credentials are strictly for local development. Change them before
+using the Compose definition outside a local demo.
+
+```bash
+cp .env.example .env
+docker compose build
+docker compose up -d
+docker compose ps
+```
+
+Compose starts PostgreSQL, MLflow, the Airflow initialization job, API server,
+scheduler, and DAG processor. Retrieve the generated development password for
+the configured `admin` user from the generated development password file:
+
+```bash
+docker compose exec airflow-api-server \
+  cat /opt/mlops/data/airflow/simple_auth_manager_passwords.json.generated
+```
+
+The available interfaces are:
+
+- Airflow: <http://localhost:8080>
+- MLflow: <http://localhost:5000>
+
+Both host ports can be changed with `AIRFLOW_PORT` and `MLFLOW_PORT` in `.env`.
+PostgreSQL remains internal to the Compose network.
+
+### Run the pipeline
+
+Trigger `mlops_customer_churn_pipeline` from the Airflow UI, or run:
+
+```bash
+docker compose exec airflow-scheduler \
+  airflow dags trigger mlops_customer_churn_pipeline
+```
+
+The default Docker demo uses deterministic synthetic data:
+
+```bash
+CHURN_PIPELINE_USE_SYNTHETIC_DATA=true
+```
+
+For the real IBM Telco ingestion path, set the following in `.env` and recreate
+the Airflow services. The downloaded RAW file is written to the persistent
+shared data volume rather than baked into the image:
+
+```bash
+CHURN_PIPELINE_USE_SYNTHETIC_DATA=false
+docker compose up -d --force-recreate \
+  airflow-api-server airflow-scheduler airflow-dag-processor
+```
+
+Inspect service health and logs with:
+
+```bash
+docker compose ps
+docker compose logs --tail=100 airflow-scheduler mlflow
+```
+
+Stop services without deleting state:
+
+```bash
+docker compose down
+```
+
+Airflow metadata, MLflow runs and registry records, artifacts, RAW data, Delta
+tables, and the DuckDB mart survive a normal `down`. To completely reset the
+local platform, including all named volumes:
+
+```bash
+docker compose down -v
+```
+
+The `-v` option permanently removes the local Docker-managed platform state.
 
 ## V2 data ingestion
 
@@ -415,9 +520,9 @@ docs/                 Project documentation
 
 ## Project status
 
-**V8 — CI/CD Industrialization.** GitHub Actions now validates code quality,
-component tests, Spark/Delta, dbt, MLflow, the Model Registry, Airflow DAG
-integrity, and a complete synthetic MLOps run. The validated V7 orchestration
-and local real-data mode remain unchanged. Docker, PostgreSQL, distributed
-executors, serving, deployment, and monitoring are intentionally not
-implemented in this version.
+**V9 — Docker & Docker Compose Industrialization.** A reusable Python 3.13 and
+Java 17 image now runs the existing Spark, dbt, ML, MLflow, and Airflow stack.
+Compose provides persistent MLflow state, PostgreSQL-backed Airflow metadata,
+health-aware startup, and both synthetic and real-data modes. Host execution
+remains supported. Distributed Spark, serving, deployment, Kubernetes, and
+monitoring are intentionally not implemented in this version.

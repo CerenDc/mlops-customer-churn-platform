@@ -29,6 +29,8 @@ dev = [
 orchestration = [
     "apache-airflow==3.3.0",
     "apache-airflow-providers-standard==1.18.0",
+    "asyncpg==0.31.0",
+    "psycopg2-binary==2.9.10",
 ]
 
 [tool.hatch.build.targets.wheel]
