@@ -1,0 +1,143 @@
+name: mlops-customer-churn-platform
+
+x-runtime-environment: &runtime-environment
+  CHURN_REPOSITORY_ROOT: /opt/mlops
+  CHURN_PIPELINE_USE_SYNTHETIC_DATA: ${CHURN_PIPELINE_USE_SYNTHETIC_DATA:-true}
+  TELCO_RAW_PATH: /opt/mlops/data/raw/telco_customer_churn.csv
+  TELCO_DELTA_PATH: /opt/mlops/data/processed/telco_customer_churn_delta
+  DBT_DUCKDB_PATH: /opt/mlops/data/features/churn_analytics.duckdb
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-telco-customer-churn}
+  MLFLOW_REGISTERED_MODEL_NAME: ${MLFLOW_REGISTERED_MODEL_NAME:-telco-churn-classifier}
+  MODEL_MIN_TEST_ROC_AUC: ${MODEL_MIN_TEST_ROC_AUC:-0.80}
+  MODEL_MIN_TEST_F1: ${MODEL_MIN_TEST_F1:-0.60}
+  MODEL_MIN_TEST_RECALL: ${MODEL_MIN_TEST_RECALL:-0.70}
+  MODEL_MIN_ROC_AUC_IMPROVEMENT: ${MODEL_MIN_ROC_AUC_IMPROVEMENT:-0.001}
+  MODEL_MAX_F1_REGRESSION: ${MODEL_MAX_F1_REGRESSION:-0.02}
+  MODEL_MAX_RECALL_REGRESSION: ${MODEL_MAX_RECALL_REGRESSION:-0.02}
+  AIRFLOW_HOME: /opt/mlops/data/airflow
+  AIRFLOW__CORE__DAGS_FOLDER: /opt/mlops/orchestration/dags
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
+  AIRFLOW__CORE__FERNET_KEY: ${AIRFLOW_FERNET_KEY:-DvcNv1G2YNg03QsJ4Nw2Yj54OibzpkT9G0L5T6h5XE4=}
+  AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: ${AIRFLOW_ADMIN_USERNAME:-admin}:admin
+  AIRFLOW__API__SECRET_KEY: ${AIRFLOW_API_SECRET_KEY:-airflow-api-dev-only-change-me}
+  AIRFLOW__DATABASE__SQL_ALCHEMY_CONN: postgresql+psycopg2://${POSTGRES_USER:-airflow}:${POSTGRES_PASSWORD:-airflow-dev-only}@postgres:5432/${POSTGRES_DB:-airflow}
+
+x-airflow-common: &airflow-common
+  image: mlops-customer-churn-platform:local
+  build:
+    context: .
+    dockerfile: Dockerfile
+  user: "${MLOPS_UID:-50000}:0"
+  environment: *runtime-environment
+  volumes:
+    - mlops-data:/opt/mlops/data
+  restart: on-failure:3
+
+services:
+  postgres:
+    image: postgres:17-bookworm
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-airflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-airflow-dev-only}
+      POSTGRES_DB: ${POSTGRES_DB:-airflow}
+    volumes:
+      - airflow-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: on-failure:3
+
+  mlflow:
+    image: mlops-customer-churn-platform:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: "${MLOPS_UID:-50000}:0"
+    command:
+      - mlflow
+      - server
+      - --backend-store-uri
+      - sqlite:////opt/mlops/data/mlflow/mlflow.db
+      - --artifacts-destination
+      - /opt/mlops/data/mlflow/artifacts
+      - --host
+      - 0.0.0.0
+      - --port
+      - "5000"
+      - --workers
+      - "1"
+      - --allowed-hosts
+      - localhost:*,127.0.0.1:*,mlflow:5000
+    volumes:
+      - mlops-data:/opt/mlops/data
+    ports:
+      - "${MLFLOW_PORT:-5000}:5000"
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:5000/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+    restart: on-failure:3
+
+  airflow-init:
+    <<: *airflow-common
+    command:
+      - bash
+      - -ec
+      - |
+        mkdir -p "$${AIRFLOW_HOME}/logs"
+        airflow db migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  airflow-api-server:
+    <<: *airflow-common
+    command: ["airflow", "api-server", "--host", "0.0.0.0", "--port", "8080"]
+    ports:
+      - "${AIRFLOW_PORT:-8080}:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mlflow:
+        condition: service_healthy
+      airflow-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - curl
+        - --fail
+        - --silent
+        - http://localhost:8080/api/v2/monitor/health
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 15s
+
+  airflow-scheduler:
+    <<: *airflow-common
+    command: ["airflow", "scheduler"]
+    depends_on:
+      airflow-api-server:
+        condition: service_healthy
+
+  airflow-dag-processor:
+    <<: *airflow-common
+    command: ["airflow", "dag-processor"]
+    depends_on:
+      airflow-api-server:
+        condition: service_healthy
+
+volumes:
+  airflow-postgres:
+  mlops-data:

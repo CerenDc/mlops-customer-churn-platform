@@ -8,7 +8,15 @@ import sys
 from pathlib import Path
 
 DAG_ID = "mlops_customer_churn_pipeline"
-REPOSITORY_ROOT = Path(__file__).resolve().parents[3]
+
+
+def configured_repository_root() -> Path:
+    """Return an explicit runtime root or the editable-install repository root."""
+    configured = os.getenv("CHURN_REPOSITORY_ROOT")
+    return Path(configured) if configured else Path(__file__).resolve().parents[3]
+
+
+REPOSITORY_ROOT = configured_repository_root()
 # Keep the virtual-environment entry point intact. Resolving this symlink can
 # produce the base interpreter path, which does not inherit the venv packages.
 PYTHON_EXECUTABLE = Path(sys.executable)

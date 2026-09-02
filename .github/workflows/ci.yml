@@ -21,7 +21,7 @@ jobs:
   quality:
     name: Quality and synthetic MLOps pipeline
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     env:
       AIRFLOW__CORE__LOAD_EXAMPLES: "false"
       CHURN_PIPELINE_USE_SYNTHETIC_DATA: "true"
@@ -106,3 +106,16 @@ jobs:
           airflow dags test mlops_customer_churn_pipeline
           --dagfile-path
           "$AIRFLOW__CORE__DAGS_FOLDER/churn_mlops_pipeline.py"
+
+      - name: Validate Docker Compose
+        run: docker compose config --quiet
+
+      - name: Build MLOps runtime image
+        run: docker compose build
+
+      - name: Validate container runtime
+        run: >-
+          docker compose run --rm --no-deps airflow-init bash -ec
+          'java -version && python -c
+          "import airflow, delta, duckdb, mlflow, pyspark;
+          import churn_platform"'

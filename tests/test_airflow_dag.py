@@ -11,6 +11,7 @@ from airflow.sdk import TriggerRule
 
 from churn_platform.orchestration.config import (
     PYTHON_EXECUTABLE,
+    configured_repository_root,
     dbt_build_command,
     prepare_raw_data_command,
 )
@@ -73,6 +74,11 @@ def test_prepare_data_production_mode_uses_ingestion() -> None:
 def test_commands_preserve_virtual_environment_interpreter() -> None:
     assert Path(sys.executable) == PYTHON_EXECUTABLE
     assert str(PYTHON_EXECUTABLE) in prepare_raw_data_command(False)
+
+
+def test_repository_root_can_be_configured_for_container(monkeypatch) -> None:
+    monkeypatch.setenv("CHURN_REPOSITORY_ROOT", "/opt/mlops")
+    assert Path("/opt/mlops") == configured_repository_root()
 
 
 def test_prepare_data_synthetic_mode_uses_raw_fixture(monkeypatch) -> None:
