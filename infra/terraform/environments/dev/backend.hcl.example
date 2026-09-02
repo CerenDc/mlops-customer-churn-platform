@@ -1,0 +1,5 @@
+bucket       = "REPLACE_WITH_TERRAFORM_STATE_BUCKET"
+key          = "mlops-customer-churn-platform/dev/terraform.tfstate"
+region       = "eu-west-3"
+encrypt      = true
+use_lockfile = true

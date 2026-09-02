@@ -11,6 +11,7 @@ requires-python = ">=3.13,<3.14"
 license = { text = "MIT" }
 authors = [{ name = "Project Contributors" }]
 dependencies = [
+    "boto3>=1.40,<2",
     "dbt-duckdb==1.11.0",
     "delta-spark==4.4.0",
     "evidently==0.7.21",

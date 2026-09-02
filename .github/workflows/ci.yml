@@ -126,7 +126,9 @@ jobs:
         run: docker compose config --quiet
 
       - name: Validate Kubernetes manifests
-        run: kubectl kustomize k8s/overlays/local > "$RUNNER_TEMP/churn-k8s.yaml"
+        run: |
+          kubectl kustomize k8s/overlays/local > "$RUNNER_TEMP/churn-k8s-local.yaml"
+          kubectl kustomize k8s/overlays/aws > "$RUNNER_TEMP/churn-k8s-aws.yaml"
 
       - name: Build MLOps runtime image
         run: docker compose build
@@ -137,3 +139,29 @@ jobs:
           'java -version && python -c
           "import airflow, delta, duckdb, mlflow, pyspark;
           import churn_platform"'
+
+  infrastructure:
+    name: Terraform validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: infra/terraform/environments/dev
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@v4
+        with:
+          terraform_version: "1.13.5"
+
+      - name: Validate Terraform formatting
+        run: terraform fmt -check -recursive ../..
+
+      - name: Initialize Terraform without a backend
+        run: terraform init -backend=false -input=false
+
+      - name: Validate Terraform configuration
+        run: terraform validate

@@ -20,6 +20,18 @@ htmlcov/
 .env.*
 !.env.example
 k8s/overlays/*/secrets.env
+.aws/
+
+# Terraform working data, state, plans, and local inputs
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+terraform.tfvars
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
 
 # Notebooks
 .ipynb_checkpoints/

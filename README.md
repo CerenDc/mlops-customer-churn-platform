@@ -2,7 +2,7 @@
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/CerenDc/mlops-customer-churn-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/CerenDc/mlops-customer-churn-platform/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/status-V11-informational.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-V12-informational.svg)](#project-status)
 
 A portfolio project that incrementally builds a production-style, end-to-end
 MLOps platform for predicting customer churn.
@@ -49,6 +49,11 @@ flowchart TD
 V7 adds a manually triggered Airflow DAG around the independently executable
 data, training, and lifecycle components. Serving remains future work.
 
+V12 also provides a separate AWS deployment path: Terraform defines a VPC,
+ECR, EKS, RDS PostgreSQL, S3, and IRSA roles; the AWS Kustomize overlay runs the
+existing Airflow, MLflow, and monitoring workloads on EKS. No AWS deployment is
+performed by CI.
+
 ## Technology roadmap
 
 | Phase | Planned focus | Candidate technologies |
@@ -64,8 +69,8 @@ data, training, and lifecycle components. Serving remains future work.
 | V8 | CI/CD industrialization | GitHub Actions, synthetic integration pipeline |
 | V9 | Reproducible local platform | Docker, Docker Compose, PostgreSQL |
 | V10 | Local Kubernetes deployment | kind, kubectl, Kustomize |
-| V11 (current) | MLOps observability and drift | Prometheus, Grafana, Evidently |
-| V12 | Serving and cloud deployment | API framework, cloud platform |
+| V11 | MLOps observability and drift | Prometheus, Grafana, Evidently |
+| V12 (current) | AWS cloud and IaC industrialization | Terraform, EKS, RDS, S3, ECR, IAM |
 
 The roadmap is directional. Technology choices will be evaluated when their
 phase begins rather than installed in advance.
@@ -121,6 +126,9 @@ suite, Spark with Delta Lake, dbt models and tests, ML training, MLflow
 tracking, the Model Registry lifecycle, and Airflow DAG integrity. One genuine
 Airflow run then exercises the complete synthetic pipeline from RAW data to
 champion-model reload and prediction, without external datasets or services.
+CI also renders both Kubernetes overlays and validates Terraform formatting,
+module initialization without a backend, and configuration syntax. It never
+plans or applies cloud infrastructure.
 
 CI uses Python 3.13, Temurin Java 17, pip caching, isolated runner-temporary
 paths, a local DuckDB feature mart, and an SQLite MLflow backend. Obsolete runs
@@ -474,6 +482,83 @@ Prometheus and Grafana have dedicated PVCs. Dashboard and datasource definitions
 remain declarative in `monitoring/` and are copied from the shared application
 image during Kubernetes pod initialization.
 
+## AWS Deployment
+
+V12 adds a declarative AWS target while preserving every local execution mode.
+It has not been deployed. The design uses one dev environment and deliberately
+avoids ALB, Route 53, ACM, MWAA, SageMaker, managed Prometheus, and managed
+Grafana.
+
+```mermaid
+flowchart TD
+    GH[GitHub Actions<br/>CI and IaC validation] --> TF[Terraform]
+    TF --> VPC[VPC<br/>public + private subnets]
+    TF --> ECR[ECR]
+    TF --> RDS[(RDS PostgreSQL)]
+    TF --> S3[(Private S3 artifacts)]
+    TF --> IAM[IAM / IRSA]
+    VPC --> EKS[EKS managed node group]
+    ECR --> EKS
+    IAM --> EKS
+    EKS --> A[Airflow]
+    EKS --> M[MLflow + registry]
+    EKS --> O[Prometheus / Grafana / Evidently]
+    A --> RDS
+    M --> RDS
+    M --> S3
+    A --> P[Spark → Delta → dbt/DuckDB → training]
+```
+
+The full rationale, storage boundaries, security decisions, and limitations are
+documented in [`docs/aws-architecture.md`](docs/aws-architecture.md).
+
+### Prerequisites and local validation
+
+A future deployment requires Terraform, AWS CLI, `kubectl`, Docker, and
+authorized AWS credentials. Static validation does not create resources and
+does not require AWS credentials:
+
+```bash
+cd infra/terraform/environments/dev
+terraform fmt -check -recursive ../..
+terraform init -backend=false
+terraform validate
+kubectl kustomize ../../../../k8s/overlays/aws
+```
+
+Copy `terraform.tfvars.example` to the ignored `terraform.tfvars` only when
+customizing a future deployment. `backend.hcl.example` documents optional S3
+remote state; its bucket must be created through a separate, reviewed bootstrap
+process.
+
+### Human-controlled future deployment
+
+The following sequence is documentation, not an automated workflow:
+
+1. Configure temporary standard AWS authentication and review
+   `terraform.tfvars`.
+2. Run `terraform init`, `terraform plan`, and review every resource and its
+   expected cost before deciding whether to run `terraform apply`.
+3. Build the existing image, authenticate Docker to the Terraform-created ECR
+   repository, and push an immutable tag.
+4. Replace the account, bucket, role, and image-tag placeholders in a local
+   deployment copy of `k8s/overlays/aws`.
+5. Configure `kubectl`, securely materialize `churn-secrets` from Secrets
+   Manager, create the separate MLflow logical database through application
+   bootstrap, then apply the AWS overlay.
+6. Verify workloads and use `kubectl port-forward`; no public ingress exists by
+   default.
+
+The full stack can incur charges for EKS, EC2 nodes, NAT Gateway, RDS, EBS, S3,
+ECR, Secrets Manager, and data transfer. It is not free-tier architecture.
+`terraform destroy` is a future operator command only: it is destructive, may
+permanently remove data, and can be blocked by RDS deletion protection or
+non-empty storage; snapshots and backups may remain billable.
+
+The AWS demo defaults to `CHURN_PIPELINE_USE_SYNTHETIC_DATA=true`. Real-data mode
+remains supported with `CHURN_PIPELINE_USE_SYNTHETIC_DATA=false`, but the
+dataset must be supplied at runtime and is never committed or uploaded by V12.
+
 ## V2 data ingestion
 
 V2 downloads the public IBM Telco Customer Churn CSV, validates its schema and
@@ -749,6 +834,7 @@ src/churn_platform/   Installable ingestion, Spark, ML, and orchestration helper
 orchestration/dags/   Airflow DAG definitions
 dbt_project/          SQL models, tests, documentation, and local profile
 k8s/                  Reusable Kubernetes base and local kind overlay
+infra/terraform/      Modular AWS infrastructure and the dev environment
 monitoring/           Prometheus and declarative Grafana configuration
 Dockerfile            Shared Python 3.13 and Java 17 runtime image
 docker-compose.yml    Local Docker Compose platform
@@ -763,10 +849,8 @@ docs/                 Project documentation
 
 ## Project status
 
-**V11 — MLOps Observability, Model Monitoring & Data Drift.** Evidently now
-generates reproducible drift reports and optional ground-truth champion
-evaluations. A lightweight exporter publishes bounded metrics to Prometheus,
-and the provisioned Grafana dashboard visualizes operational monitoring under
-both Docker Compose and Kubernetes. Monitoring recommends investigation or
-retraining but never promotes a model. Host, real-data, synthetic, Compose and
-Kubernetes execution remain supported.
+**V12 — AWS Cloud & Terraform Industrialization.** Modular Terraform now
+defines a cost-conscious dev VPC, ECR, EKS, RDS PostgreSQL, S3 artifact storage,
+and IRSA roles. An AWS Kustomize overlay adapts the existing Airflow, MLflow,
+Prometheus, Grafana, and Evidently workloads without replacing local execution.
+Infrastructure is validated as code only; no AWS resources have been deployed.

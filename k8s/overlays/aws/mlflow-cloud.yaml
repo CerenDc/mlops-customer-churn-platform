@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mlflow
+spec:
+  template:
+    spec:
+      containers:
+        - name: mlflow
+          command:
+            - sh
+            - -ec
+          args:
+            - >-
+              mlflow server
+              --backend-store-uri "$MLFLOW_BACKEND_STORE_URI"
+              --artifacts-destination "$MLFLOW_ARTIFACT_ROOT"
+              --host 0.0.0.0 --port 5000 --workers 2
+              --allowed-hosts "localhost:*,127.0.0.1:*,mlflow:5000"
+          envFrom:
+            - configMapRef:
+                name: churn-runtime-config
+            - secretRef:
+                name: churn-secrets
