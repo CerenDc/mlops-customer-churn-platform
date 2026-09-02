@@ -17,7 +17,10 @@
     {"type": "stat", "title": "Failed Runs", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_pipeline_failures_total", "refId": "A"}], "gridPos": {"h": 4, "w": 6, "x": 12, "y": 16}},
     {"type": "timeseries", "title": "Stage Durations", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_pipeline_stage_duration_seconds", "legendFormat": "{{stage}}", "refId": "A"}], "gridPos": {"h": 8, "w": 6, "x": 18, "y": 16}},
     {"type": "stat", "title": "dbt Tests Passed", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_dbt_tests_passed", "refId": "A"}], "gridPos": {"h": 4, "w": 9, "x": 0, "y": 20}},
-    {"type": "stat", "title": "dbt Tests Failed", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_dbt_tests_failed", "refId": "A"}], "gridPos": {"h": 4, "w": 9, "x": 9, "y": 20}}
+    {"type": "stat", "title": "dbt Tests Failed", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "churn_dbt_tests_failed", "refId": "A"}], "gridPos": {"h": 4, "w": 9, "x": 9, "y": 20}},
+    {"type": "stat", "title": "Inference Requests", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "sum(churn_serving_inference_requests_total)", "refId": "A"}], "gridPos": {"h": 4, "w": 8, "x": 0, "y": 28}},
+    {"type": "stat", "title": "Inference Failures", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "sum(churn_serving_inference_failures_total)", "refId": "A"}], "gridPos": {"h": 4, "w": 8, "x": 8, "y": 28}},
+    {"type": "timeseries", "title": "Inference Latency p95", "datasource": {"type": "prometheus", "uid": "prometheus"}, "targets": [{"expr": "histogram_quantile(0.95, sum(rate(churn_serving_inference_duration_seconds_bucket[5m])) by (le))", "refId": "A"}], "gridPos": {"h": 6, "w": 8, "x": 16, "y": 28}}
   ],
   "refresh": "15s",
   "schemaVersion": 41,

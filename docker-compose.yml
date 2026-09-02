@@ -11,6 +11,7 @@ x-runtime-environment: &runtime-environment
   MLFLOW_TRACKING_URI: http://mlflow:5000
   MLFLOW_EXPERIMENT_NAME: ${MLFLOW_EXPERIMENT_NAME:-telco-customer-churn}
   MLFLOW_REGISTERED_MODEL_NAME: ${MLFLOW_REGISTERED_MODEL_NAME:-telco-churn-classifier}
+  MLFLOW_MODEL_ALIAS: ${MLFLOW_MODEL_ALIAS:-champion}
   MODEL_MIN_TEST_ROC_AUC: ${MODEL_MIN_TEST_ROC_AUC:-0.80}
   MODEL_MIN_TEST_F1: ${MODEL_MIN_TEST_F1:-0.60}
   MODEL_MIN_TEST_RECALL: ${MODEL_MIN_TEST_RECALL:-0.70}
@@ -89,6 +90,32 @@ services:
       start_period: 10s
     restart: on-failure:3
 
+  serving-api:
+    image: mlops-customer-churn-platform:local
+    build:
+      context: .
+      dockerfile: Dockerfile
+    user: "${MLOPS_UID:-50000}:0"
+    command:
+      - uvicorn
+      - churn_platform.serving.app:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8001"
+    environment: *runtime-environment
+    ports:
+      - "${SERVING_PORT:-8001}:8001"
+    depends_on:
+      mlflow:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8001/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+    restart: on-failure:3
+
   metrics-exporter:
     image: mlops-customer-churn-platform:local
     build:
@@ -129,6 +156,8 @@ services:
       - "${PROMETHEUS_PORT:-9090}:9090"
     depends_on:
       metrics-exporter:
+        condition: service_healthy
+      serving-api:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:9090/-/healthy"]

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "mlops-customer-churn-platform"
-version = "0.1.0"
+version = "13.0.0"
 description = "A production-style MLOps platform for customer churn prediction."
 readme = "README.md"
 requires-python = ">=3.13,<3.14"
@@ -15,12 +15,14 @@ dependencies = [
     "dbt-duckdb==1.11.0",
     "delta-spark==4.4.0",
     "evidently==0.7.21",
+    "fastapi>=0.135,<1",
     "httpx>=0.28,<1",
     "mlflow==3.15.2",
     "pandas>=2.2,<3",
     "pyspark==4.2.0",
     "prometheus-client==0.26.0",
     "scikit-learn==1.9.0",
+    "uvicorn>=0.41,<1",
     "xgboost==3.4.1",
 ]
 
