@@ -1,0 +1,7 @@
+aws_region            = "eu-west-3"
+enable_nat_gateway    = true
+node_instance_types   = ["m7i.large"]
+node_desired_size     = 2
+rds_instance_class    = "db.t4g.micro"
+rds_multi_az          = false
+artifact_bucket_name  = null

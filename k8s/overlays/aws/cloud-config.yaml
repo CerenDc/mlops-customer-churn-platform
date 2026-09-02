@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: churn-runtime-config
+data:
+  AWS_REGION: eu-west-3
+  AWS_DEFAULT_REGION: eu-west-3
+  CHURN_PIPELINE_USE_SYNTHETIC_DATA: "true"
+  MLFLOW_ARTIFACT_ROOT: s3://REPLACE_WITH_ARTIFACT_BUCKET/mlflow
