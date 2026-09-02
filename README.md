@@ -1,177 +1,110 @@
 # MLOps Customer Churn Platform
 
-[![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/CerenDc/mlops-customer-churn-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/CerenDc/mlops-customer-churn-platform/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/status-V12-informational.svg)](#project-status)
+[![Python 3.13](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
+[![Kubernetes](https://img.shields.io/badge/Kubernetes-Kustomize-326CE5?logo=kubernetes&logoColor=white)](https://kubernetes.io/)
+[![Terraform](https://img.shields.io/badge/Terraform-AWS_IaC-844FBA?logo=terraform&logoColor=white)](https://www.terraform.io/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-A portfolio project that incrementally builds a production-style, end-to-end
-MLOps platform for predicting customer churn.
+Production-style end-to-end MLOps platform for customer churn prediction,
+covering data processing, tested feature engineering, model training and
+promotion, REST inference, orchestration, containerization, Kubernetes
+deployment, observability, CI, and validated AWS Infrastructure as Code.
 
-## Business problem
+**Python · Spark · Delta Lake · dbt · DuckDB · scikit-learn · XGBoost · MLflow · Airflow · FastAPI · Docker · Kubernetes · Evidently · Prometheus · Grafana · Terraform · AWS · GitHub Actions**
 
-Customer churn reduces recurring revenue and increases the cost of replacing
-departed customers. A reliable churn signal can help retention teams identify
-at-risk customers early, prioritize outreach, and measure the impact of
-interventions.
+> Portfolio implementation: local and CI paths are exercised; AWS is an
+> undeployed target architecture. The repository does not claim to serve real
+> production users or automatically provision paid infrastructure.
 
-## Project objective
+## Why this project exists
 
-Build a maintainable platform that ingests customer data, creates reproducible
-features, trains and evaluates churn models, deploys predictions, and monitors
-data and model quality. Each capability will be introduced in a small,
-testable version so the operational decisions remain understandable.
+Customer churn reduces recurring revenue and increases acquisition costs. The
+useful engineering problem is not only predicting churn—it is building a
+traceable path from raw customer data to a governed, observable prediction.
+This repository demonstrates that complete lifecycle with explicit contracts
+and independently testable components.
 
 ## Architecture
 
 ```mermaid
-flowchart TD
-    Z[Apache Airflow] -. orchestrates .-> B
-    A[IBM Telco CSV] --> B[Python ingestion]
-    B --> C[RAW<br/>data/raw]
-    C --> D[Apache Spark]
-    D --> E[Delta Lake<br/>data/processed]
-    E -->|delta_scan| F[DuckDB]
-    F --> G[dbt staging]
-    G --> H[dbt intermediate]
-    H --> I[dbt feature mart<br/>data/features]
-    I --> J[scikit-learn pipelines]
-    J --> K[MLflow experiments<br/>data/mlflow]
-    K --> L[Selected candidate]
-    L --> M[MLflow Model Registry]
-    M --> N[Promotion gates]
-    N --> O[champion alias]
-    Z -. orchestrates .-> D
-    Z -. orchestrates .-> G
-    Z -. orchestrates .-> J
-    Z -. orchestrates .-> M
+flowchart LR
+    A[IBM Telco CSV] --> B[Ingestion]
+    B --> C[Spark validation]
+    C --> D[(Delta Lake)]
+    D --> E[dbt models + tests]
+    E --> F[(DuckDB feature mart)]
+    F --> G[sklearn / XGBoost]
+    G --> H[MLflow Tracking]
+    H --> I[Registry + promotion gates]
+    I --> J[champion alias]
+    J --> K[FastAPI inference]
+    K --> L[Predictions]
 ```
 
-V7 adds a manually triggered Airflow DAG around the independently executable
-data, training, and lifecycle components. Serving remains future work.
+```mermaid
+flowchart TB
+    AF[Airflow] -. orchestrates .-> PIPE[Data + ML lifecycle]
+    EV[Evidently] --> PM[Prometheus metrics]
+    API[FastAPI metrics] --> PM
+    PM --> GR[Grafana]
+    DK[Docker image] --> CP[Compose local platform]
+    DK --> K8S[Kubernetes + Kustomize]
+    CI[GitHub Actions] --> DK
+    CI --> TF[Terraform validation]
+    TF -. undeployed target .-> AWS[VPC · ECR · EKS · RDS · S3 · IAM]
+```
 
-V12 also provides a separate AWS deployment path: Terraform defines a VPC,
-ECR, EKS, RDS PostgreSQL, S3, and IRSA roles; the AWS Kustomize overlay runs the
-existing Airflow, MLflow, and monitoring workloads on EKS. No AWS deployment is
-performed by CI.
+The Airflow pipeline is:
 
-## Technology roadmap
+```text
+prepare_raw_data → spark_processing → dbt_build → train_models
+                 → registry_lifecycle → verify_champion
+```
 
-| Phase | Planned focus | Candidate technologies |
-| --- | --- | --- |
-| V1 | Python project foundation, linting, and tests | Python 3.13, pytest, Ruff |
-| V1.1 | Developer automation and continuous integration | GitHub Actions, VS Code tasks |
-| V2 | Reproducible data ingestion and validation | pandas, HTTPX |
-| V3 | Typed local processing and transactional storage | Apache Spark, Delta Lake |
-| V4 | SQL modeling, analytical quality, documentation, and lineage | dbt, DuckDB |
-| V5 | Model training, evaluation, and experiment tracking | scikit-learn, XGBoost, MLflow |
-| V6 | Model versioning and champion/challenger lifecycle | MLflow Model Registry |
-| V7 | Workflow orchestration | Apache Airflow 3 |
-| V8 | CI/CD industrialization | GitHub Actions, synthetic integration pipeline |
-| V9 | Reproducible local platform | Docker, Docker Compose, PostgreSQL |
-| V10 | Local Kubernetes deployment | kind, kubectl, Kustomize |
-| V11 | MLOps observability and drift | Prometheus, Grafana, Evidently |
-| V12 (current) | AWS cloud and IaC industrialization | Terraform, EKS, RDS, S3, ECR, IAM |
+The API loads the complete registered sklearn pipeline through
+`models:/<registered-model>@champion`. It returns HTTP 503 if a champion cannot
+be loaded; it never returns a fabricated fallback prediction.
 
-The roadmap is directional. Technology choices will be evaluated when their
-phase begins rather than installed in advance.
+## What this project demonstrates
 
-## Local setup
+- Typed Spark processing and transactional Delta storage.
+- Tested SQL lineage and customer-grain features with dbt/DuckDB.
+- Leakage-safe preprocessing embedded in sklearn model pipelines.
+- Reproducible logistic-regression and XGBoost comparison.
+- MLflow lineage, signatures, artifacts, Registry versions, and aliases.
+- Deterministic champion/challenger promotion with quality guardrails.
+- Genuine Airflow orchestration of the full synthetic and real-data paths.
+- Typed FastAPI inference with OpenAPI, readiness, and Prometheus metrics.
+- Evidently drift analysis plus provisioned Prometheus/Grafana observability.
+- One reusable Docker image, a Compose platform, and Kustomize deployments.
+- CI that exercises the synthetic lifecycle without cloud credentials.
+- Modular, cost-conscious Terraform for an undeployed AWS target.
+
+## Quick start
+
+### Python development
 
 Prerequisites: Python 3.13, Java 17, and Git.
-
-On Apple Silicon macOS with Homebrew, install and expose Java 17 with:
-
-```bash
-brew install openjdk@17
-export JAVA_HOME="/opt/homebrew/opt/openjdk@17/libexec/openjdk.jdk/Contents/Home"
-export PATH="$JAVA_HOME/bin:$PATH"
-```
-
-Linux and CI environments may provide Java 17 through their normal JDK
-distribution. Confirm the active runtime with `java -version`.
 
 ```bash
 python3.13 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
-cp .env.example .env
-```
-
-Install the isolated orchestration extra only when working with Airflow:
-
-```bash
 python -m pip install -e ".[dev,orchestration]"
-```
-
-Run the quality checks:
-
-```bash
+cp .env.example .env
 pytest -q
 ruff check .
 ruff format --check .
 ```
 
-The `.env` file is ignored by Git. Do not store secrets in `.env.example`.
+The `.env` file and generated data are ignored. The real IBM Telco dataset is
+downloaded only when explicitly running real-data mode.
 
-The same checks can be launched in VS Code from **Tasks: Run Task** by choosing
-**Quality Check**.
+### Complete local platform
 
-## Continuous Integration
-
-The [`.github/workflows/ci.yml`](.github/workflows/ci.yml) workflow validates
-pull requests targeting `main` and pushes to `develop`, `feature/**`, and
-`fix/**`. It checks Python imports, Ruff linting and formatting, the pytest
-suite, Spark with Delta Lake, dbt models and tests, ML training, MLflow
-tracking, the Model Registry lifecycle, and Airflow DAG integrity. One genuine
-Airflow run then exercises the complete synthetic pipeline from RAW data to
-champion-model reload and prediction, without external datasets or services.
-CI also renders both Kubernetes overlays and validates Terraform formatting,
-module initialization without a backend, and configuration syntax. It never
-plans or applies cloud infrastructure.
-
-CI uses Python 3.13, Temurin Java 17, pip caching, isolated runner-temporary
-paths, a local DuckDB feature mart, and an SQLite MLflow backend. Obsolete runs
-on the same branch or pull request are cancelled automatically. Real-data
-execution remains separate and available locally with:
-
-```bash
-CHURN_PIPELINE_USE_SYNTHETIC_DATA=false airflow dags test \
-  mlops_customer_churn_pipeline \
-  --dagfile-path "$PWD/orchestration/dags/churn_mlops_pipeline.py"
-```
-
-## Docker / Local Platform
-
-Docker Compose packages the existing pipeline without changing its execution
-graph. Spark, dbt, training, and registry commands run inside the shared Python
-image under Airflow's `LocalExecutor`; no standalone Spark cluster is needed.
-PostgreSQL stores only Airflow metadata. DuckDB remains the analytical engine,
-and MLflow uses a persistent SQLite backend plus a shared artifact directory.
-
-```mermaid
-flowchart TD
-    C[Docker Compose] --> P[(PostgreSQL<br/>Airflow metadata)]
-    C --> A[Airflow API, scheduler,<br/>and DAG processor]
-    C --> M[MLflow tracking server]
-    A --> R[Shared Python 3.13 runtime]
-    R --> S[Spark + Delta]
-    S --> D[dbt + DuckDB]
-    D --> T[ML training]
-    T --> M
-    M --> G[Model Registry<br/>champion alias]
-    R <-->|shared data volume| M
-```
-
-### Requirements
-
-- Docker Desktop or Docker Engine
-- Docker Compose v2
-
-### Setup
-
-The example credentials are strictly for local development. Change them before
-using the Compose definition outside a local demo.
+Prerequisite: Docker Compose v2.
 
 ```bash
 cp .env.example .env
@@ -180,54 +113,34 @@ docker compose up -d
 docker compose ps
 ```
 
-Compose starts PostgreSQL, MLflow, the Airflow initialization job, API server,
-scheduler, and DAG processor. Retrieve the generated development password for
-the configured `admin` user from the generated development password file:
+| Service | URL | Purpose |
+| --- | --- | --- |
+| Airflow | <http://localhost:8080> | DAG orchestration and logs |
+| MLflow | <http://localhost:5000> | Experiments, artifacts, Registry |
+| Prediction API | <http://localhost:8001/docs> | OpenAPI and champion inference |
+| Prometheus | <http://localhost:9090> | Pipeline and serving metrics |
+| Grafana | <http://localhost:3000> | Provisioned MLOps dashboard |
+
+The example Grafana login is `admin` / `grafana-dev-only`. Retrieve Airflow’s
+generated local development password with:
 
 ```bash
 docker compose exec airflow-api-server \
   cat /opt/mlops/data/airflow/simple_auth_manager_passwords.json.generated
 ```
 
-The available interfaces are:
-
-- Airflow: <http://localhost:8080>
-- MLflow: <http://localhost:5000>
-
-Both host ports can be changed with `AIRFLOW_PORT` and `MLFLOW_PORT` in `.env`.
-PostgreSQL remains internal to the Compose network.
-
-### Run the pipeline
-
-Trigger `mlops_customer_churn_pipeline` from the Airflow UI, or run:
+Trigger the synthetic DAG before requesting a prediction so that MLflow has a
+real champion:
 
 ```bash
 docker compose exec airflow-scheduler \
   airflow dags trigger mlops_customer_churn_pipeline
+curl --fail http://localhost:8001/health
+curl --fail http://localhost:8001/model/info
 ```
 
-The default Docker demo uses deterministic synthetic data:
-
-```bash
-CHURN_PIPELINE_USE_SYNTHETIC_DATA=true
-```
-
-For the real IBM Telco ingestion path, set the following in `.env` and recreate
-the Airflow services. The downloaded RAW file is written to the persistent
-shared data volume rather than baked into the image:
-
-```bash
-CHURN_PIPELINE_USE_SYNTHETIC_DATA=false
-docker compose up -d --force-recreate \
-  airflow-api-server airflow-scheduler airflow-dag-processor
-```
-
-Inspect service health and logs with:
-
-```bash
-docker compose ps
-docker compose logs --tail=100 airflow-scheduler mlflow
-```
+The complete valid `/predict` payload and interview walkthrough are in
+[`docs/DEMO.md`](docs/DEMO.md).
 
 Stop services without deleting state:
 
@@ -235,622 +148,147 @@ Stop services without deleting state:
 docker compose down
 ```
 
-Airflow metadata, MLflow runs and registry records, artifacts, RAW data, Delta
-tables, and the DuckDB mart survive a normal `down`. To completely reset the
-local platform, including all named volumes:
+`docker compose down --volumes` is intentionally destructive to local demo
+databases and artifacts.
+
+## Data and model contracts
+
+The feature mart contains one row per customer. Identifiers and both target
+representations are excluded from training. Numeric fields are median-imputed;
+categorical fields are most-frequent-imputed and one-hot encoded with unknown
+categories ignored. Every fitted transformation is stored inside the registered
+model pipeline.
+
+Training makes deterministic 70/15/15 stratified splits. Validation selects a
+candidate; the untouched test partition supplies final metrics. Promotion uses
+configurable absolute ROC-AUC, F1, and recall floors plus incumbent-relative
+guardrails. The Registry lifecycle registers once, assigns aliases, reloads the
+champion, and validates real predictions.
+
+## Monitoring
 
 ```bash
-docker compose down -v
+python -m churn_platform.monitoring.run --scenario normal
+python -m churn_platform.monitoring.run --scenario drifted
 ```
 
-The `-v` option permanently removes the local Docker-managed platform state.
+Evidently detects feature-distribution drift. Monitoring also exposes data,
+model, Airflow, and dbt status. FastAPI adds request, failure, prediction-class,
+and inference-latency metrics. Prometheus scrapes both endpoints and Grafana
+loads the dashboard from version-controlled JSON. Drift recommends action; it
+does not automatically retrain or promote a model.
 
 ## Kubernetes
 
-The local Kubernetes deployment reuses the V9 image and the existing Airflow
-DAG. Kustomize deploys the platform to a dedicated `churn-mlops` namespace on a
-single-node kind cluster. Spark remains local-mode PySpark inside the Airflow
-scheduler; there is no Spark cluster, dbt server, or Kubernetes executor.
+The `k8s/base` manifests include PostgreSQL, Airflow, MLflow, serving,
+Prometheus, Grafana, and persistent storage. The local kind overlay supplies
+explicit disposable demo credentials; the AWS overlay removes local PostgreSQL,
+uses ECR/RDS/S3 configuration, and references runtime-provided secrets.
 
-```mermaid
-flowchart TD
-    G[GitHub Actions] --> I[Docker image]
-    I --> K[Kubernetes / kind]
-    K --> A[Airflow API, scheduler,<br/>and DAG processor]
-    K --> M[MLflow]
-    K --> P[(PostgreSQL<br/>Airflow metadata)]
-    A --> R[MLOps Python runtime]
-    R --> S[Spark + Delta]
-    S --> D[dbt + DuckDB]
-    D --> T[ML training]
-    T --> M
-    M --> C[Model Registry<br/>champion alias]
-    A <-->|pipeline-data PVC| M
+Render without a cluster:
+
+```bash
+kubectl kustomize k8s/overlays/local >/tmp/churn-local.yaml
+kubectl kustomize k8s/overlays/aws >/tmp/churn-aws.yaml
 ```
 
-### Requirements
-
-- Docker Desktop or Docker Engine
-- kind
-- kubectl with built-in Kustomize support
-
-### Create and deploy the local cluster
+Local kind deployment:
 
 ```bash
 kind create cluster --name churn-mlops --config k8s/kind-config.yaml
 docker build -t churn-mlops:local .
 kind load docker-image churn-mlops:local --name churn-mlops
 kubectl apply -k k8s/overlays/local
+kubectl get pods,svc -n churn-mlops
 ```
 
-The local overlay contains clearly marked development-only credentials. It is
-not a production configuration. The reusable base contains no credential
-values.
+This PVC layout targets a single-node portfolio demo; `ReadWriteOnce` is not
+presented as production multi-node shared storage.
 
-Wait for initialization and the long-running workloads without fixed sleeps:
+## AWS Infrastructure as Code
 
-```bash
-kubectl wait --for=condition=complete job/airflow-db-migrate \
-  -n churn-mlops --timeout=300s
-kubectl rollout status statefulset/postgres -n churn-mlops --timeout=180s
-kubectl rollout status deployment/mlflow -n churn-mlops --timeout=180s
-kubectl rollout status deployment/airflow-api-server \
-  -n churn-mlops --timeout=300s
-kubectl rollout status deployment/airflow-scheduler \
-  -n churn-mlops --timeout=300s
-kubectl rollout status deployment/airflow-dag-processor \
-  -n churn-mlops --timeout=300s
-```
+Terraform defines one dev environment with a two-AZ VPC, private EKS nodes,
+immutable ECR, private encrypted RDS PostgreSQL, private versioned S3 artifacts,
+Secrets Manager, and bucket-scoped IRSA roles. Defaults are cost-conscious but
+not free: EKS, EC2, NAT Gateway, RDS, EBS, storage, and transfer can incur cost.
 
-Inspect the deployed resources:
-
-```bash
-kubectl get pods -n churn-mlops
-kubectl get services -n churn-mlops
-kubectl get pvc -n churn-mlops
-```
-
-### Access Airflow and MLflow
-
-Use two terminals for the local port forwards:
-
-```bash
-kubectl port-forward service/airflow-api-server 8080:8080 -n churn-mlops
-kubectl port-forward service/mlflow 5000:5000 -n churn-mlops
-```
-
-- Airflow: <http://localhost:8080>
-- MLflow: <http://localhost:5000>
-
-The local Airflow username is `admin`. Retrieve its generated development
-password from the API pod:
-
-```bash
-kubectl exec deployment/airflow-api-server -n churn-mlops -- \
-  cat /opt/mlops/data/airflow/simple_auth_manager_passwords.json.generated
-```
-
-### Run and inspect the pipeline
-
-The Kubernetes overlay defaults to deterministic synthetic data. Confirm DAG
-discovery and trigger the unchanged workflow from the scheduler pod:
-
-```bash
-kubectl exec deployment/airflow-scheduler -n churn-mlops -- \
-  airflow dags list-import-errors
-kubectl exec deployment/airflow-scheduler -n churn-mlops -- \
-  airflow dags list
-kubectl exec deployment/airflow-scheduler -n churn-mlops -- \
-  airflow dags trigger mlops_customer_churn_pipeline
-```
-
-For real-data mode, change `CHURN_PIPELINE_USE_SYNTHETIC_DATA` to `false` in
-`k8s/base/configmap.yaml`, rebuild the manifests, and restart the Airflow
-Deployments. The existing ingestion task downloads the public IBM Telco CSV
-into the `pipeline-data` PVC; the dataset is never baked into the image.
-
-Useful diagnostics include:
-
-```bash
-kubectl logs deployment/airflow-scheduler -n churn-mlops --tail=100
-kubectl logs deployment/mlflow -n churn-mlops --tail=100
-kubectl get events -n churn-mlops --sort-by=.lastTimestamp
-```
-
-The `pipeline-data` PVC preserves RAW, Delta, DuckDB, Airflow logs, MLflow runs,
-registry metadata and artifacts across pod replacement. `postgres-data`
-preserves Airflow metadata. This ReadWriteOnce layout is intentionally designed
-for a single-node local cluster, not multi-node production HA.
-
-Delete the complete local environment with:
-
-```bash
-kind delete cluster --name churn-mlops
-```
-
-Deleting the kind cluster also removes its local PVC data.
-
-## Monitoring & Observability
-
-V11 adds a focused local monitoring layer without changing the training DAG or
-promotion policy:
-
-- Airflow remains responsible for workflow orchestration.
-- MLflow remains the source of experiment, model and registry history.
-- Evidently compares bounded feature distributions and produces HTML/JSON
-  reports.
-- The metrics exporter publishes the latest persistent monitoring snapshot in
-  Prometheus format.
-- Prometheus stores the operational time series.
-- Grafana visualizes drift, data volume, dbt quality and champion performance.
-
-```mermaid
-flowchart TD
-    A[Airflow training pipeline] --> M[MLflow + Champion]
-    A --> D[Feature mart]
-    D --> E[Evidently monitoring]
-    M --> E
-    E --> R[HTML + JSON report]
-    E --> X[Metrics exporter]
-    X --> P[Prometheus]
-    P --> G[Grafana dashboard]
-```
-
-The training graph remains unchanged. Monitoring has its own manual Airflow DAG,
-`churn_model_monitoring`, because model training and production monitoring
-normally have different schedules.
-
-### Run monitoring locally
-
-Run the data pipeline through champion promotion first. A normal comparison
-uses the existing dbt feature mart as both the known-good reference and current
-dataset:
-
-```bash
-python -m churn_platform.monitoring.run --scenario normal
-```
-
-Generate a deterministic drift demonstration by shifting `tenure`,
-`monthly_charges`, `contract`, and `payment_method` while preserving the feature
-schema and labels:
-
-```bash
-python -m churn_platform.monitoring.run --scenario drifted
-```
-
-Reports are written under:
-
-```text
-data/monitoring/normal/data_drift_report.html
-data/monitoring/normal/data_drift_report.json
-data/monitoring/drifted/data_drift_report.html
-data/monitoring/drifted/data_drift_report.json
-```
-
-The latest metrics snapshot is `data/monitoring/metrics.json`. Evidently uses
-its default column-level tests: numeric features normally use a two-sample KS
-p-value and categorical features use an appropriate categorical p-value test.
-A feature is drifted when its p-value is below `0.05`. Dataset drift is reported
-when at least 50% of monitored features drift.
-
-When ground-truth `churn_flag` values and an MLflow champion are available, the
-same evaluation implementation calculates reference/current accuracy,
-precision, recall, F1 and ROC-AUC. A ROC-AUC drop greater than `0.05` produces
-`RETRAIN_RECOMMENDED`; drift without measured degradation produces
-`INVESTIGATE`. Monitoring never changes the champion alias.
-
-Data drift does not necessarily mean the model is bad. Model performance
-degradation requires ground-truth evaluation; without labels, V11 reports only
-distribution drift.
-
-### Monitoring services
-
-Start the complete Compose platform and run monitoring inside the scheduler:
-
-```bash
-docker compose up -d
-docker compose exec airflow-scheduler \
-  python -m churn_platform.monitoring.run --scenario normal
-docker compose exec airflow-scheduler \
-  python -m churn_platform.monitoring.run --scenario drifted
-```
-
-Local interfaces:
-
-- Metrics: <http://localhost:8000/metrics>
-- Prometheus: <http://localhost:9090>
-- Grafana: <http://localhost:3000>
-
-Grafana uses local-only credentials `admin` / `grafana-dev-only`, configurable
-through `.env`. Its provisioned Prometheus datasource and **Customer Churn
-MLOps Overview** dashboard require no UI setup. Panels show monitoring status,
-feature rows, dataset drift/share, champion version, current ROC-AUC/F1,
-feature-level drift and dbt test results.
-
-For Kubernetes, deploy the existing overlay and port-forward the monitoring
-services:
-
-```bash
-kubectl port-forward service/metrics-exporter 8000:8000 -n churn-mlops
-kubectl port-forward service/prometheus 9090:9090 -n churn-mlops
-kubectl port-forward service/grafana 3000:3000 -n churn-mlops
-kubectl exec deployment/airflow-scheduler -n churn-mlops -- \
-  airflow dags trigger churn_model_monitoring
-```
-
-Prometheus and Grafana have dedicated PVCs. Dashboard and datasource definitions
-remain declarative in `monitoring/` and are copied from the shared application
-image during Kubernetes pod initialization.
-
-## AWS Deployment
-
-V12 adds a declarative AWS target while preserving every local execution mode.
-It has not been deployed. The design uses one dev environment and deliberately
-avoids ALB, Route 53, ACM, MWAA, SageMaker, managed Prometheus, and managed
-Grafana.
-
-```mermaid
-flowchart TD
-    GH[GitHub Actions<br/>CI and IaC validation] --> TF[Terraform]
-    TF --> VPC[VPC<br/>public + private subnets]
-    TF --> ECR[ECR]
-    TF --> RDS[(RDS PostgreSQL)]
-    TF --> S3[(Private S3 artifacts)]
-    TF --> IAM[IAM / IRSA]
-    VPC --> EKS[EKS managed node group]
-    ECR --> EKS
-    IAM --> EKS
-    EKS --> A[Airflow]
-    EKS --> M[MLflow + registry]
-    EKS --> O[Prometheus / Grafana / Evidently]
-    A --> RDS
-    M --> RDS
-    M --> S3
-    A --> P[Spark → Delta → dbt/DuckDB → training]
-```
-
-The full rationale, storage boundaries, security decisions, and limitations are
-documented in [`docs/aws-architecture.md`](docs/aws-architecture.md).
-
-### Prerequisites and local validation
-
-A future deployment requires Terraform, AWS CLI, `kubectl`, Docker, and
-authorized AWS credentials. Static validation does not create resources and
-does not require AWS credentials:
+Safe local validation:
 
 ```bash
 cd infra/terraform/environments/dev
 terraform fmt -check -recursive ../..
 terraform init -backend=false
 terraform validate
-kubectl kustomize ../../../../k8s/overlays/aws
 ```
 
-Copy `terraform.tfvars.example` to the ignored `terraform.tfvars` only when
-customizing a future deployment. `backend.hcl.example` documents optional S3
-remote state; its bucket must be created through a separate, reviewed bootstrap
-process.
+No CI workflow runs `terraform plan` or `apply`. See
+[`docs/aws-architecture.md`](docs/aws-architecture.md) for security, storage,
+cost, and persistence boundaries.
 
-### Human-controlled future deployment
+## Continuous integration
 
-The following sequence is documentation, not an automated workflow:
+`MLOps Continuous Integration` runs on pull requests to `main` and pushes to
+development/feature/fix branches. It validates Ruff, component tests, Spark and
+Delta integration, Airflow DAG discovery, a genuine end-to-end synthetic DAG,
+normal/drifted monitoring, Compose, local/AWS Kustomize renders, the Docker
+runtime, and Terraform fmt/init/validate. Repository permissions are read-only;
+AWS credentials and deployment are not part of CI.
 
-1. Configure temporary standard AWS authentication and review
-   `terraform.tfvars`.
-2. Run `terraform init`, `terraform plan`, and review every resource and its
-   expected cost before deciding whether to run `terraform apply`.
-3. Build the existing image, authenticate Docker to the Terraform-created ECR
-   repository, and push an immutable tag.
-4. Replace the account, bucket, role, and image-tag placeholders in a local
-   deployment copy of `k8s/overlays/aws`.
-5. Configure `kubectl`, securely materialize `churn-secrets` from Secrets
-   Manager, create the separate MLflow logical database through application
-   bootstrap, then apply the AWS overlay.
-6. Verify workloads and use `kubectl port-forward`; no public ingress exists by
-   default.
+## Real-data mode
 
-The full stack can incur charges for EKS, EC2 nodes, NAT Gateway, RDS, EBS, S3,
-ECR, Secrets Manager, and data transfer. It is not free-tier architecture.
-`terraform destroy` is a future operator command only: it is destructive, may
-permanently remove data, and can be blocked by RDS deletion protection or
-non-empty storage; snapshots and backups may remain billable.
-
-The AWS demo defaults to `CHURN_PIPELINE_USE_SYNTHETIC_DATA=true`. Real-data mode
-remains supported with `CHURN_PIPELINE_USE_SYNTHETIC_DATA=false`, but the
-dataset must be supplied at runtime and is never committed or uploaded by V12.
-
-## V2 data ingestion
-
-V2 downloads the public IBM Telco Customer Churn CSV, validates its schema and
-key business constraints, and atomically saves the accepted file. Run it from
-the repository root after completing the local setup:
+The existing ingestion path remains available:
 
 ```bash
-python -m churn_platform.ingestion.telco
-```
-
-The downloaded file is written to `data/raw/telco_customer_churn.csv`. Raw data
-is reproducible from the public source and can be large, so it is deliberately
-ignored by Git; only the `.gitkeep` placeholder is versioned.
-
-No cleaning, feature engineering, or model work occurs during ingestion.
-
-## V3 — Spark + Delta Lake
-
-Spark provides a distributed-style DataFrame processing model locally and
-prepares the project for processing patterns used on larger data platforms. V3
-uses an explicit schema, normalizes field types, safely parses `TotalCharges`,
-validates business constraints, and adds minimal lineage metadata.
-
-Delta Lake stores the processed data in data lake files with an ACID
-transaction log. This improves schema reliability and establishes a foundation
-for table versioning while remaining compatible with Spark. The same format is
-useful for a later Databricks phase, but Databricks is not implemented here.
-
-Run both independent pipeline stages from the repository root:
-
-```bash
-python -m churn_platform.ingestion.telco
-python -m churn_platform.spark.transform_telco
-```
-
-The processing command reads the immutable raw CSV and writes a genuine Delta
-table to `data/processed/telco_customer_churn_delta/`. Both generated datasets
-are ignored by Git.
-
-### Data layers
-
-| Layer | Location | Responsibility |
-| --- | --- | --- |
-| RAW | `data/raw/` | Original source data; treated as immutable |
-| PROCESSED | `data/processed/` | Typed, minimally cleaned data stored as Delta Lake |
-| FEATURES | `data/features/` | Customer-grain analytical feature mart built by dbt |
-
-## V4 — dbt + DuckDB + Data Quality
-
-Spark and dbt have complementary responsibilities. Spark performs scalable,
-programmatic raw-to-processed work: schema enforcement, type normalization,
-structural validation, and Delta Lake publication. dbt performs
-processed-to-analytical work: SQL business transformations, relational
-modeling, tests, documentation, and lineage. The dbt layer does not repeat the
-Spark cleaning logic.
-
-DuckDB is the local dbt engine because it is embedded, fast, free, and requires
-no service infrastructure. Its official Delta extension reads the Spark table
-directly with `delta_scan()`. DuckDB is a practical local analytical engine,
-not a claim that every production cloud warehouse should be replaced by it.
-
-The dbt lineage is:
-
-```text
-Delta source
-    ↓
-stg_telco_customers (view)
-    ↓
-int_telco_customer_metrics (view)
-    ↓
-fct_customer_churn_features (table)
-```
-
-The staging view provides snake_case names and adds `churn_flag`. The
-intermediate view adds a small set of explainable business metrics. The final
-table excludes Spark lineage columns and forms the customer-level contract for
-later model training. It does not one-hot encode, scale, or impute features.
-
-Run dbt from the repository root without a global profile:
-
-```bash
-dbt debug --project-dir dbt_project --profiles-dir dbt_project
-dbt build --project-dir dbt_project --profiles-dir dbt_project
-dbt test --project-dir dbt_project --profiles-dir dbt_project
-dbt docs generate --project-dir dbt_project --profiles-dir dbt_project
-```
-
-`TELCO_DELTA_PATH` can override the Delta source, and `DBT_DUCKDB_PATH` can
-override the generated database path. Local defaults point to
-`data/processed/telco_customer_churn_delta` and
-`data/features/churn_analytics.duckdb`. Generated dbt and DuckDB artifacts are
-ignored by Git.
-
-### Derived analytical features
-
-| Feature | Definition |
-| --- | --- |
-| `churn_flag` | `1` for `Yes`, `0` for `No`; original `churn` is retained |
-| `has_internet` | `1` when internet service is not `No` |
-| `has_phone` | `1` when phone service is `Yes` |
-| `service_count` | Count of subscribed phone, internet, and optional digital services |
-| `is_month_to_month` | `1` for a month-to-month contract |
-| `has_long_term_contract` | `1` for a one-year or two-year contract |
-| `monthly_to_total_charge_ratio` | Monthly charges divided by nonzero total charges |
-| `tenure_group` | Human-readable tenure band from no tenure through 49+ months |
-
-## V5 — model training + MLflow tracking
-
-V5 reads only the dbt feature mart and keeps preprocessing inside each fitted
-scikit-learn pipeline. Numeric values use median imputation; logistic regression
-also scales them. Categorical values use most-frequent imputation and one-hot
-encoding with unknown-category handling. `customer_id`, the original `churn`
-label, and `churn_flag` are excluded from predictors to prevent leakage.
-
-The deterministic, stratified split is 70% training, 15% validation, and 15%
-test. Logistic regression and XGBoost are fitted on the training partition and
-compared only by validation ROC AUC. The test partition is evaluated once, only
-after selecting the winner. This discipline keeps the final test estimate from
-influencing model choice.
-
-Run the upstream stages and training manually from the repository root:
-
-```bash
-python -m churn_platform.ingestion.telco
-python -m churn_platform.spark.transform_telco
-dbt build --project-dir dbt_project --profiles-dir dbt_project
-python -m churn_platform.ml.train
-```
-
-MLflow stores experiment metadata in `data/mlflow/mlflow.db` and model artifacts
-under `data/mlflow/artifacts/`. Both are generated local state and ignored by
-Git. MLflow provides repeatable run comparison, dataset lineage, metrics,
-reports, the complete reloadable pipeline, and model interpretation artifacts.
-It is deliberately local in V5: there is no model registry or remote tracking
-server.
-
-Inspect runs in the optional local UI (started only when requested):
-
-```bash
-mlflow ui --backend-store-uri sqlite:///data/mlflow/mlflow.db \
-  --host 127.0.0.1 --port 5000
-```
-
-Then open `http://127.0.0.1:5000` and select the
-`telco-customer-churn` experiment.
-
-## V6 — MLflow Model Registry + champion/challenger
-
-Experiment Tracking records every training run, including its parameters,
-metrics, artifacts, and input dataset. Model Registry has a narrower lifecycle
-role: it versions selected models, preserves lineage metadata, and exposes
-stable aliases for approved and evaluating versions. V6 uses aliases only; it
-does not use MLflow's legacy model stages.
-
-```text
-selected experiment run
-        ↓
-complete logged pipeline
-        ↓
-registered model version
-        ↓
-challenger
-        ↓
-promotion gates
-   ┌────┴────┐
- reject   promote
-   ↓          ↓
-champion   champion alias moves
-unchanged
-```
-
-The `challenger` is the latest selected candidate under evaluation. The
-`champion` is the currently approved version. ROC AUC is the primary ranking
-metric because it measures discrimination across classification thresholds.
-F1 and recall are guardrails so a small ROC AUC gain cannot hide materially
-worse practical churn detection.
-
-Bootstrap promotion requires minimum test ROC AUC, F1, and recall. Once a
-champion exists, a challenger must also achieve the configured minimum ROC AUC
-improvement without exceeding permitted F1 or recall regression. Configure the
-policy with `MODEL_MIN_TEST_ROC_AUC`, `MODEL_MIN_TEST_F1`,
-`MODEL_MIN_TEST_RECALL`, `MODEL_MIN_ROC_AUC_IMPROVEMENT`,
-`MODEL_MAX_F1_REGRESSION`, and `MODEL_MAX_RECALL_REGRESSION`.
-
-Run the complete manual workflow with:
-
-```bash
-python -m churn_platform.ingestion.telco
-python -m churn_platform.spark.transform_telco
-dbt build --project-dir dbt_project --profiles-dir dbt_project
-python -m churn_platform.ml.train
-python -m churn_platform.ml.registry
-```
-
-Manual stage execution remains supported alongside orchestration.
-Later serving applications will load the stable URI below instead of knowing a
-specific version number:
-
-```text
-models:/telco-churn-classifier@champion
-```
-
-Moving the alias from version 1 to version 4 or 17 requires no serving-code
-change. Model serving itself is not implemented in V6.
-
-## V7 — Apache Airflow orchestration
-
-Airflow adds dependency management, bounded retries, failure propagation,
-observability, and a foundation for later scheduling. It does not replace the
-specialized components: Spark performs data processing, dbt performs SQL
-transformation and quality checks, MLflow manages experiments and model
-lifecycle, and Airflow orchestrates their existing command-line interfaces.
-
-```text
-prepare_raw_data
-        ↓
-spark_processing
-        ↓
-dbt_build
-        ↓
-train_models
-        ↓
-registry_lifecycle
-        ↓
-verify_champion
-```
-
-The DAG is manual by default (`schedule=None`), does not catch up, and allows
-one active run. Set `CHURN_DAG_SCHEDULE` only when an explicit schedule is
-wanted. Training has no retries because each attempt intentionally creates new
-experiment runs; registry retries are safe because V6 prevents duplicate model
-versions. Re-running the whole DAG is therefore a new training cycle, not a
-perfectly idempotent operation.
-
-Tasks exchange state through the filesystem, Delta Lake, DuckDB, and MLflow.
-They do not place DataFrames, datasets, or model binaries in XCom. The Airflow
-run ID and DAG ID are attached to MLflow training runs as small lineage tags.
-
-For local development, install the orchestration extra and run:
-
-```bash
-export AIRFLOW_HOME="$PWD/data/airflow"
-export AIRFLOW__CORE__DAGS_FOLDER="$PWD/orchestration/dags"
-export AIRFLOW__CORE__LOAD_EXAMPLES=false
-airflow db migrate
-airflow dags reserialize
-airflow dags list
-airflow standalone
-```
-
-The local UI is available at `http://127.0.0.1:8080`. Airflow's SQLite metadata
-database and generated standalone credentials are local-development artifacts
-under `data/airflow/` and are ignored by Git. SQLite is not intended as the
-production Airflow metadata backend.
-
-Run the DAG once without starting persistent services:
-
-```bash
-airflow dags test mlops_customer_churn_pipeline \
+CHURN_PIPELINE_USE_SYNTHETIC_DATA=false airflow dags test \
+  mlops_customer_churn_pipeline \
   --dagfile-path "$PWD/orchestration/dags/churn_mlops_pipeline.py"
 ```
 
-Production mode uses the real ingestion command. CI sets
-`CHURN_PIPELINE_USE_SYNTHETIC_DATA=true` and temporary paths, changing only the
-RAW preparation task; all downstream Spark, dbt, ML, registry, and verification
-code remains identical. Every manual V2–V6 command documented above remains
-independently usable.
+This mode was validated with the actual 7,043-row IBM Telco dataset. The data is
+not committed, and CI intentionally uses a deterministic 60-row fixture.
 
-## Repository layout
+## Repository structure
 
 ```text
-src/churn_platform/   Installable ingestion, Spark, ML, and orchestration helpers
-orchestration/dags/   Airflow DAG definitions
-dbt_project/          SQL models, tests, documentation, and local profile
-k8s/                  Reusable Kubernetes base and local kind overlay
-infra/terraform/      Modular AWS infrastructure and the dev environment
-monitoring/           Prometheus and declarative Grafana configuration
-Dockerfile            Shared Python 3.13 and Java 17 runtime image
-docker-compose.yml    Local Docker Compose platform
-tests/                Automated tests
-data/                 Raw, processed, and feature data zones
-ml/                   Reserved top-level modeling workspace
-notebooks/            Exploratory notebooks
-docs/                 Project documentation
-.github/workflows/    GitHub Actions continuous integration
-.vscode/              Shared editor configuration
+.
+├── src/churn_platform/
+│   ├── ingestion/          # IBM Telco acquisition and validation
+│   ├── spark/              # typed Spark → Delta processing
+│   ├── ml/                 # training, tracking, promotion, registry
+│   ├── orchestration/      # Airflow command/configuration helpers
+│   ├── monitoring/         # Evidently and metrics publication
+│   └── serving/            # FastAPI champion inference
+├── orchestration/dags/     # pipeline and monitoring DAGs
+├── dbt_project/            # transformations, tests, feature mart
+├── monitoring/             # Prometheus and Grafana as code
+├── k8s/                    # base plus local/AWS Kustomize overlays
+├── infra/terraform/        # AWS modules and dev environment
+├── tests/                  # component and integration tests
+├── docs/                   # demo, decisions, interview, portfolio
+├── Dockerfile
+├── docker-compose.yml
+└── .github/workflows/ci.yml
 ```
 
-## Project status
+## Documentation
 
-**V12 — AWS Cloud & Terraform Industrialization.** Modular Terraform now
-defines a cost-conscious dev VPC, ECR, EKS, RDS PostgreSQL, S3 artifact storage,
-and IRSA roles. An AWS Kustomize overlay adapts the existing Airflow, MLflow,
-Prometheus, Grafana, and Evidently workloads without replacing local execution.
-Infrastructure is validated as code only; no AWS resources have been deployed.
+- [Architecture decisions](docs/architecture-decisions.md)
+- [Complete demo guide](docs/DEMO.md)
+- [Technical interview cheat sheet](docs/INTERVIEW.md)
+- [AWS architecture](docs/aws-architecture.md)
+- [Portfolio/CV/Malt/LinkedIn copy](docs/PORTFOLIO.md)
+- [Screenshot checklist](docs/assets/README.md)
+
+## Current status and limitations
+
+**V13 — Model Serving and Portfolio Finalization.** The repository implements a
+real FastAPI inference layer, but remains a portfolio system. AWS is not
+deployed; no public ingress/TLS, managed secret synchronization, HA proof, load
+benchmark, production SLO, restore drill, or automated CD is claimed. Local
+Spark/DuckDB and PVC assumptions are documented rather than disguised. A
+running API caches the resolved champion until it restarts; automated hot
+refresh after alias promotion is a future serving improvement.
+
+## License
+
+[MIT](LICENSE)

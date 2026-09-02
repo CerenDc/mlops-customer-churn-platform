@@ -13,6 +13,7 @@ data:
   MLFLOW_TRACKING_URI: http://mlflow:5000
   MLFLOW_EXPERIMENT_NAME: telco-customer-churn-k8s
   MLFLOW_REGISTERED_MODEL_NAME: telco-churn-classifier-k8s
+  MLFLOW_MODEL_ALIAS: champion
   MODEL_MIN_TEST_ROC_AUC: "0.80"
   MODEL_MIN_TEST_F1: "0.60"
   MODEL_MIN_TEST_RECALL: "0.70"

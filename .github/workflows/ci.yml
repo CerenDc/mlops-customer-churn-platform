@@ -74,7 +74,8 @@ jobs:
       - name: Validate Python imports
         run: >-
           python -c
-          "import airflow, delta, duckdb, mlflow, pyspark;
+          "import airflow, delta, duckdb, fastapi, mlflow, pyspark;
+          import churn_platform.serving.app;
           import churn_platform"
 
       - name: Verify Java runtime
@@ -137,7 +138,8 @@ jobs:
         run: >-
           docker compose run --rm --no-deps airflow-init bash -ec
           'java -version && python -c
-          "import airflow, delta, duckdb, mlflow, pyspark;
+          "import airflow, delta, duckdb, fastapi, mlflow, pyspark;
+          import churn_platform.serving.app;
           import churn_platform"'
 
   infrastructure:
