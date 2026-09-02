@@ -1,0 +1,27 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: churn-mlops
+
+resources:
+  - ../../base
+
+images:
+  - name: churn-mlops
+    newName: churn-mlops
+    newTag: local
+
+generatorOptions:
+  disableNameSuffixHash: true
+
+# These credentials are intentionally limited to the disposable local kind
+# environment. Supply an external Secret for any non-local deployment.
+secretGenerator:
+  - name: churn-secrets
+    literals:
+      - POSTGRES_USER=airflow
+      - POSTGRES_PASSWORD=airflow-dev-only
+      - POSTGRES_DB=airflow
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow-dev-only@postgres:5432/airflow
+      - AIRFLOW__CORE__FERNET_KEY=DvcNv1G2YNg03QsJ4Nw2Yj54OibzpkT9G0L5T6h5XE4=
+      - AIRFLOW__API__SECRET_KEY=airflow-api-dev-only-change-me

@@ -110,6 +110,9 @@ jobs:
       - name: Validate Docker Compose
         run: docker compose config --quiet
 
+      - name: Validate Kubernetes manifests
+        run: kubectl kustomize k8s/overlays/local > "$RUNNER_TEMP/churn-k8s.yaml"
+
       - name: Build MLOps runtime image
         run: docker compose build
 
