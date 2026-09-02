@@ -29,6 +29,7 @@ RUN python -m pip install --upgrade pip \
     && python -m pip install ".[orchestration]"
 
 COPY dbt_project ./dbt_project
+COPY monitoring ./monitoring
 COPY orchestration ./orchestration
 
 RUN mkdir -p \

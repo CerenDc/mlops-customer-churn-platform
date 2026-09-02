@@ -9,5 +9,6 @@ resources:
   - storage.yaml
   - postgres/statefulset.yaml
   - mlflow/deployment.yaml
+  - monitoring/deployments.yaml
   - airflow/migrate-job.yaml
   - airflow/deployments.yaml

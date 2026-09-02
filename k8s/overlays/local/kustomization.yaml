@@ -25,3 +25,5 @@ secretGenerator:
       - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow-dev-only@postgres:5432/airflow
       - AIRFLOW__CORE__FERNET_KEY=DvcNv1G2YNg03QsJ4Nw2Yj54OibzpkT9G0L5T6h5XE4=
       - AIRFLOW__API__SECRET_KEY=airflow-api-dev-only-change-me
+      - GRAFANA_ADMIN_USER=admin
+      - GRAFANA_ADMIN_PASSWORD=grafana-dev-only
