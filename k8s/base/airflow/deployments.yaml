@@ -1,0 +1,279 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: airflow-api-server
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: airflow-api-server
+    app.kubernetes.io/part-of: churn-mlops
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-api-server
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airflow-api-server
+      app.kubernetes.io/part-of: churn-mlops
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airflow-api-server
+        app.kubernetes.io/part-of: churn-mlops
+    spec:
+      securityContext:
+        fsGroup: 0
+        runAsNonRoot: true
+        runAsUser: 50000
+      initContainers:
+        - name: wait-for-migrations
+          image: churn-mlops:local
+          imagePullPolicy: IfNotPresent
+          command: [airflow, db, check-migrations, --migration-wait-timeout, "300"]
+          envFrom:
+            - configMapRef:
+                name: churn-runtime-config
+            - secretRef:
+                name: churn-secrets
+      containers:
+        - name: airflow-api-server
+          image: churn-mlops:local
+          imagePullPolicy: IfNotPresent
+          args: [airflow, api-server, --host, 0.0.0.0, --port, "8080"]
+          envFrom:
+            - configMapRef:
+                name: churn-runtime-config
+            - secretRef:
+                name: churn-secrets
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /api/v2/monitor/health
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 18
+          livenessProbe:
+            httpGet:
+              path: /api/v2/monitor/health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: pipeline-data
+              mountPath: /opt/mlops/data
+      volumes:
+        - name: pipeline-data
+          persistentVolumeClaim:
+            claimName: pipeline-data
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-scheduler
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airflow-scheduler
+      app.kubernetes.io/part-of: churn-mlops
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airflow-scheduler
+        app.kubernetes.io/part-of: churn-mlops
+    spec:
+      securityContext:
+        fsGroup: 0
+        runAsNonRoot: true
+        runAsUser: 50000
+      initContainers:
+        - name: wait-for-migrations
+          image: churn-mlops:local
+          imagePullPolicy: IfNotPresent
+          command: [airflow, db, check-migrations, --migration-wait-timeout, "300"]
+          envFrom:
+            - configMapRef:
+                name: churn-runtime-config
+            - secretRef:
+                name: churn-secrets
+      containers:
+        - name: airflow-scheduler
+          image: churn-mlops:local
+          imagePullPolicy: IfNotPresent
+          args: [airflow, scheduler]
+          envFrom:
+            - configMapRef:
+                name: churn-runtime-config
+            - secretRef:
+                name: churn-secrets
+          readinessProbe:
+            exec:
+              command:
+                - airflow
+                - jobs
+                - check
+                - --job-type
+                - SchedulerJob
+                - --local
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            exec:
+              command:
+                - airflow
+                - jobs
+                - check
+                - --job-type
+                - SchedulerJob
+                - --local
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 500m
+              memory: 1Gi
+            limits:
+              cpu: "2"
+              memory: 3Gi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: pipeline-data
+              mountPath: /opt/mlops/data
+      volumes:
+        - name: pipeline-data
+          persistentVolumeClaim:
+            claimName: pipeline-data
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: airflow-dag-processor
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 0
+      maxUnavailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: airflow-dag-processor
+      app.kubernetes.io/part-of: churn-mlops
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: airflow-dag-processor
+        app.kubernetes.io/part-of: churn-mlops
+    spec:
+      securityContext:
+        fsGroup: 0
+        runAsNonRoot: true
+        runAsUser: 50000
+      initContainers:
+        - name: wait-for-migrations
+          image: churn-mlops:local
+          imagePullPolicy: IfNotPresent
+          command: [airflow, db, check-migrations, --migration-wait-timeout, "300"]
+          envFrom:
+            - configMapRef:
+                name: churn-runtime-config
+            - secretRef:
+                name: churn-secrets
+      containers:
+        - name: airflow-dag-processor
+          image: churn-mlops:local
+          imagePullPolicy: IfNotPresent
+          args: [airflow, dag-processor]
+          envFrom:
+            - configMapRef:
+                name: churn-runtime-config
+            - secretRef:
+                name: churn-secrets
+          readinessProbe:
+            exec:
+              command:
+                - airflow
+                - jobs
+                - check
+                - --job-type
+                - DagProcessorJob
+                - --local
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            exec:
+              command:
+                - airflow
+                - jobs
+                - check
+                - --job-type
+                - DagProcessorJob
+                - --local
+            initialDelaySeconds: 60
+            periodSeconds: 20
+            timeoutSeconds: 10
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 200m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1536Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: pipeline-data
+              mountPath: /opt/mlops/data
+      volumes:
+        - name: pipeline-data
+          persistentVolumeClaim:
+            claimName: pipeline-data

@@ -2,7 +2,7 @@
 
 [![Python 3.13](https://img.shields.io/badge/python-3.13-blue.svg)](https://www.python.org/)
 [![CI](https://github.com/CerenDc/mlops-customer-churn-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/CerenDc/mlops-customer-churn-platform/actions/workflows/ci.yml)
-[![Status](https://img.shields.io/badge/status-V9-informational.svg)](#project-status)
+[![Status](https://img.shields.io/badge/status-V10-informational.svg)](#project-status)
 
 A portfolio project that incrementally builds a production-style, end-to-end
 MLOps platform for predicting customer churn.
@@ -62,8 +62,9 @@ data, training, and lifecycle components. Serving remains future work.
 | V6 | Model versioning and champion/challenger lifecycle | MLflow Model Registry |
 | V7 | Workflow orchestration | Apache Airflow 3 |
 | V8 | CI/CD industrialization | GitHub Actions, synthetic integration pipeline |
-| V9 (current) | Reproducible local platform | Docker, Docker Compose, PostgreSQL |
-| V10 | Serving and observability | API framework, monitoring stack |
+| V9 | Reproducible local platform | Docker, Docker Compose, PostgreSQL |
+| V10 (current) | Local Kubernetes deployment | kind, kubectl, Kustomize |
+| V11 | Serving and observability | API framework, monitoring stack |
 
 The roadmap is directional. Technology choices will be evaluated when their
 phase begins rather than installed in advance.
@@ -234,6 +235,131 @@ docker compose down -v
 ```
 
 The `-v` option permanently removes the local Docker-managed platform state.
+
+## Kubernetes
+
+The local Kubernetes deployment reuses the V9 image and the existing Airflow
+DAG. Kustomize deploys the platform to a dedicated `churn-mlops` namespace on a
+single-node kind cluster. Spark remains local-mode PySpark inside the Airflow
+scheduler; there is no Spark cluster, dbt server, or Kubernetes executor.
+
+```mermaid
+flowchart TD
+    G[GitHub Actions] --> I[Docker image]
+    I --> K[Kubernetes / kind]
+    K --> A[Airflow API, scheduler,<br/>and DAG processor]
+    K --> M[MLflow]
+    K --> P[(PostgreSQL<br/>Airflow metadata)]
+    A --> R[MLOps Python runtime]
+    R --> S[Spark + Delta]
+    S --> D[dbt + DuckDB]
+    D --> T[ML training]
+    T --> M
+    M --> C[Model Registry<br/>champion alias]
+    A <-->|pipeline-data PVC| M
+```
+
+### Requirements
+
+- Docker Desktop or Docker Engine
+- kind
+- kubectl with built-in Kustomize support
+
+### Create and deploy the local cluster
+
+```bash
+kind create cluster --name churn-mlops --config k8s/kind-config.yaml
+docker build -t churn-mlops:local .
+kind load docker-image churn-mlops:local --name churn-mlops
+kubectl apply -k k8s/overlays/local
+```
+
+The local overlay contains clearly marked development-only credentials. It is
+not a production configuration. The reusable base contains no credential
+values.
+
+Wait for initialization and the long-running workloads without fixed sleeps:
+
+```bash
+kubectl wait --for=condition=complete job/airflow-db-migrate \
+  -n churn-mlops --timeout=300s
+kubectl rollout status statefulset/postgres -n churn-mlops --timeout=180s
+kubectl rollout status deployment/mlflow -n churn-mlops --timeout=180s
+kubectl rollout status deployment/airflow-api-server \
+  -n churn-mlops --timeout=300s
+kubectl rollout status deployment/airflow-scheduler \
+  -n churn-mlops --timeout=300s
+kubectl rollout status deployment/airflow-dag-processor \
+  -n churn-mlops --timeout=300s
+```
+
+Inspect the deployed resources:
+
+```bash
+kubectl get pods -n churn-mlops
+kubectl get services -n churn-mlops
+kubectl get pvc -n churn-mlops
+```
+
+### Access Airflow and MLflow
+
+Use two terminals for the local port forwards:
+
+```bash
+kubectl port-forward service/airflow-api-server 8080:8080 -n churn-mlops
+kubectl port-forward service/mlflow 5000:5000 -n churn-mlops
+```
+
+- Airflow: <http://localhost:8080>
+- MLflow: <http://localhost:5000>
+
+The local Airflow username is `admin`. Retrieve its generated development
+password from the API pod:
+
+```bash
+kubectl exec deployment/airflow-api-server -n churn-mlops -- \
+  cat /opt/mlops/data/airflow/simple_auth_manager_passwords.json.generated
+```
+
+### Run and inspect the pipeline
+
+The Kubernetes overlay defaults to deterministic synthetic data. Confirm DAG
+discovery and trigger the unchanged workflow from the scheduler pod:
+
+```bash
+kubectl exec deployment/airflow-scheduler -n churn-mlops -- \
+  airflow dags list-import-errors
+kubectl exec deployment/airflow-scheduler -n churn-mlops -- \
+  airflow dags list
+kubectl exec deployment/airflow-scheduler -n churn-mlops -- \
+  airflow dags trigger mlops_customer_churn_pipeline
+```
+
+For real-data mode, change `CHURN_PIPELINE_USE_SYNTHETIC_DATA` to `false` in
+`k8s/base/configmap.yaml`, rebuild the manifests, and restart the Airflow
+Deployments. The existing ingestion task downloads the public IBM Telco CSV
+into the `pipeline-data` PVC; the dataset is never baked into the image.
+
+Useful diagnostics include:
+
+```bash
+kubectl logs deployment/airflow-scheduler -n churn-mlops --tail=100
+kubectl logs deployment/mlflow -n churn-mlops --tail=100
+kubectl get events -n churn-mlops --sort-by=.lastTimestamp
+```
+
+The `pipeline-data` PVC preserves RAW, Delta, DuckDB, Airflow logs, MLflow runs,
+registry metadata and artifacts across pod replacement. `postgres-data`
+preserves Airflow metadata. This ReadWriteOnce layout is intentionally designed
+for a single-node local cluster, not multi-node production HA.
+
+Delete the complete local environment with:
+
+```bash
+kind delete cluster --name churn-mlops
+```
+
+Deleting the kind cluster also removes its local PVC data.
 
 ## V2 data ingestion
 
@@ -509,6 +635,9 @@ independently usable.
 src/churn_platform/   Installable ingestion, Spark, ML, and orchestration helpers
 orchestration/dags/   Airflow DAG definitions
 dbt_project/          SQL models, tests, documentation, and local profile
+k8s/                  Reusable Kubernetes base and local kind overlay
+Dockerfile            Shared Python 3.13 and Java 17 runtime image
+docker-compose.yml    Local Docker Compose platform
 tests/                Automated tests
 data/                 Raw, processed, and feature data zones
 ml/                   Reserved top-level modeling workspace
@@ -520,9 +649,10 @@ docs/                 Project documentation
 
 ## Project status
 
-**V9 — Docker & Docker Compose Industrialization.** A reusable Python 3.13 and
-Java 17 image now runs the existing Spark, dbt, ML, MLflow, and Airflow stack.
-Compose provides persistent MLflow state, PostgreSQL-backed Airflow metadata,
-health-aware startup, and both synthetic and real-data modes. Host execution
-remains supported. Distributed Spark, serving, deployment, Kubernetes, and
-monitoring are intentionally not implemented in this version.
+**V10 — Kubernetes Industrialization.** The V9 Python 3.13 and Java 17 image now
+deploys through Kustomize to a local kind cluster. Kubernetes provides
+health-checked Airflow, MLflow and PostgreSQL workloads, deterministic Airflow
+database migration, services, resource bounds and persistent claims while the
+existing six-task DAG remains unchanged. Host and Docker Compose execution stay
+supported. Cloud deployment, multi-node HA, ingress, serving and monitoring are
+intentionally outside this version.

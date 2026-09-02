@@ -1,0 +1,25 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: churn-runtime-config
+data:
+  CHURN_REPOSITORY_ROOT: /opt/mlops
+  CHURN_PIPELINE_USE_SYNTHETIC_DATA: "true"
+  TELCO_RAW_PATH: /opt/mlops/data/raw/telco_customer_churn.csv
+  TELCO_DELTA_PATH: /opt/mlops/data/processed/telco_customer_churn_delta
+  DBT_DUCKDB_PATH: /opt/mlops/data/features/churn_analytics.duckdb
+  MLFLOW_TRACKING_URI: http://mlflow:5000
+  MLFLOW_EXPERIMENT_NAME: telco-customer-churn-k8s
+  MLFLOW_REGISTERED_MODEL_NAME: telco-churn-classifier-k8s
+  MODEL_MIN_TEST_ROC_AUC: "0.80"
+  MODEL_MIN_TEST_F1: "0.60"
+  MODEL_MIN_TEST_RECALL: "0.70"
+  MODEL_MIN_ROC_AUC_IMPROVEMENT: "0.001"
+  MODEL_MAX_F1_REGRESSION: "0.02"
+  MODEL_MAX_RECALL_REGRESSION: "0.02"
+  AIRFLOW_HOME: /opt/mlops/data/airflow
+  AIRFLOW__CORE__DAGS_FOLDER: /opt/mlops/orchestration/dags
+  AIRFLOW__CORE__LOAD_EXAMPLES: "false"
+  AIRFLOW__CORE__EXECUTOR: LocalExecutor
+  AIRFLOW__CORE__EXECUTION_API_SERVER_URL: http://airflow-api-server:8080/execution/
+  AIRFLOW__CORE__SIMPLE_AUTH_MANAGER_USERS: admin:admin
